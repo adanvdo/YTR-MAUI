@@ -1,0 +1,23 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Visual Studio
+.vs/
+*.rsuser
+[Tt]est[Rr]esult*/
+[Dd]ebug*/
+[Rr]elease*/
+
+## Rider
+.idea/
+
+## macOS
+.DS_Store
+
+## Windows
+Thumbs.db

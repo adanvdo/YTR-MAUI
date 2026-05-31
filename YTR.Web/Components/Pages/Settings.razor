@@ -1,0 +1,80 @@
+@page "/settings"
+@inject ISettingsService SettingsService
+
+<PageTitle>YTR - Settings</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Settings</MudText>
+
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+    <MudTabPanel Text="Downloads">
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
+                          Label="Video Download Path" Variant="Variant.Outlined" />
+            <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
+                          Label="Audio Download Path" Variant="Variant.Outlined" />
+            <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
+                       Label="Use video title as filename" Color="Color.Primary" />
+            <MudSwitch @bind-Value="SettingsService.Download.CreateFolderForPlaylists"
+                       Label="Create folder for playlist downloads" Color="Color.Primary" />
+            <MudSwitch @bind-Value="SettingsService.Download.AutoOpenDownloadLocation"
+                       Label="Auto-open download location" Color="Color.Primary" />
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Restrictions">
+        <MudStack Spacing="3">
+            <MudSwitch @bind-Value="SettingsService.Restrictions.EnforceRestrictions"
+                       Label="Enforce restrictions for new downloads" Color="Color.Primary" />
+            <MudSelect @bind-Value="SettingsService.Restrictions.MaxResolution"
+                       Label="Max Resolution" Variant="Variant.Outlined">
+                @foreach (var res in Enum.GetValues<Resolution>())
+                {
+                    <MudSelectItem Value="res">@res</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
+                             Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" />
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Processing">
+        <MudStack Spacing="3">
+            <MudSwitch @bind-Value="SettingsService.Processing.AlwaysConvertToPreferred"
+                       Label="Always convert to preferred format" Color="Color.Primary" />
+            <MudSelect @bind-Value="SettingsService.Processing.PreferredVideoFormat"
+                       Label="Preferred Video Format" Variant="Variant.Outlined">
+                @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif))
+                {
+                    <MudSelectItem Value="fmt">@fmt</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect @bind-Value="SettingsService.Processing.PreferredAudioFormat"
+                       Label="Preferred Audio Format" Variant="Variant.Outlined">
+                @foreach (var fmt in Enum.GetValues<AudioFormat>().Where(f => f != AudioFormat.Unspecified))
+                {
+                    <MudSelectItem Value="fmt">@fmt</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch @bind-Value="SettingsService.Processing.VerboseOutput"
+                       Label="Verbose output" Color="Color.Primary" />
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="About">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body1"><b>YTR</b> — Media Downloader</MudText>
+            <MudText Typo="Typo.body2">Dependencies: yt-dlp + FFmpeg</MudText>
+            <MudLink Href="https://github.com/adanvdo/YT-RED-UI" Target="_blank">GitHub Repository</MudLink>
+        </MudStack>
+    </MudTabPanel>
+</MudTabs>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
+           OnClick="SaveSettings">Save</MudButton>
+
+@code {
+    private async Task SaveSettings()
+    {
+        await SettingsService.SaveAsync();
+    }
+}

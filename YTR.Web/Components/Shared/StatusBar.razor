@@ -1,0 +1,26 @@
+<MudPaper Class="pa-2 mt-4" Elevation="0" Style="background: transparent;">
+    @if (_isDownloading)
+    {
+        <MudProgressLinear Value="_progress" Color="Color.Primary" Rounded="true" Size="Size.Medium">
+            <MudText Typo="Typo.caption">@_statusMessage</MudText>
+        </MudProgressLinear>
+    }
+    else if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <MudText Typo="Typo.caption" Color="Color.Tertiary">@_statusMessage</MudText>
+    }
+</MudPaper>
+
+@code {
+    private bool _isDownloading;
+    private double _progress;
+    private string _statusMessage = "Ready";
+
+    [Parameter] public string? Message { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Message is not null)
+            _statusMessage = Message;
+    }
+}

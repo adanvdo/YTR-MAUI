@@ -1,0 +1,56 @@
+<MudPaper Class="@($"pa-4 {Class}")" Elevation="1">
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Available Formats</MudText>
+
+    @if (Formats is null || Formats.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Tertiary">No formats loaded.</MudText>
+    }
+    else
+    {
+        <MudDataGrid T="FormatInfo" Items="Formats" Dense="true" Hover="true"
+                     SelectedItem="_selectedFormat" SelectedItemChanged="OnFormatSelectionChanged"
+                     Filterable="true" SortMode="SortMode.Single">
+            <Columns>
+                <PropertyColumn Property="x => x.FormatId" Title="ID" />
+                <PropertyColumn Property="x => x.Extension" Title="Ext" />
+                <PropertyColumn Property="x => x.Width" Title="W" />
+                <PropertyColumn Property="x => x.Height" Title="H" />
+                <PropertyColumn Property="x => x.VideoCodec" Title="Video Codec" />
+                <PropertyColumn Property="x => x.AudioCodec" Title="Audio Codec" />
+                <PropertyColumn Property="x => x.FormatNote" Title="Note" />
+                <TemplateColumn Title="Size">
+                    <CellTemplate>
+                        @FormatFileSize(context.Item)
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public IReadOnlyList<FormatInfo>? Formats { get; set; }
+    [Parameter] public EventCallback<FormatInfo> FormatSelected { get; set; }
+
+    private FormatInfo? _selectedFormat;
+
+    private async Task OnFormatSelectionChanged(FormatInfo format)
+    {
+        _selectedFormat = format;
+        await FormatSelected.InvokeAsync(format);
+    }
+
+    private static string FormatFileSize(FormatInfo format)
+    {
+        var size = format.FileSize ?? format.ApproximateFileSize;
+        if (size is null) return "—";
+        return size switch
+        {
+            < 1024 => $"{size} B",
+            < 1024 * 1024 => $"{size / 1024.0:F1} KB",
+            < 1024 * 1024 * 1024 => $"{size / (1024.0 * 1024):F1} MB",
+            _ => $"{size / (1024.0 * 1024 * 1024):F2} GB"
+        };
+    }
+}

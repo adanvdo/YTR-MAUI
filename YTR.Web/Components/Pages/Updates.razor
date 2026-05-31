@@ -1,0 +1,39 @@
+@page "/updates"
+
+<PageTitle>YTR - Updates</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Updates</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">Application</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText>Check for new YTR releases.</MudText>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Check for Updates</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">Dependencies</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.body2">yt-dlp: checking...</MudText>
+                    <MudText Typo="Typo.body2">FFmpeg: checking...</MudText>
+                </MudStack>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mr-2">Update yt-dlp</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Update FFmpeg</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+</MudGrid>

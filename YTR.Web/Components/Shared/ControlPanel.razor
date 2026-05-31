@@ -1,0 +1,67 @@
+<MudPaper Class="pa-4" Elevation="1">
+    <MudText Typo="Typo.subtitle1" Class="mb-3">Download Options</MudText>
+
+    <MudStack Spacing="3">
+        @* Segment extraction *@
+        <MudExpansionPanels>
+            <MudExpansionPanel Text="Segment" Expanded="false">
+                <MudStack Spacing="2">
+                    <MudTimePicker @bind-Time="_segmentStart" Label="Start Time" />
+                    <MudTimePicker @bind-Time="_segmentDuration" Label="Duration" />
+                </MudStack>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Crop" Expanded="false">
+                <MudGrid>
+                    <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" /></MudItem>
+                    <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" /></MudItem>
+                    <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" /></MudItem>
+                    <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" /></MudItem>
+                </MudGrid>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Convert" Expanded="false">
+                <MudStack Spacing="2">
+                    <MudSelect @bind-Value="_convertVideo" Label="Video Format" Variant="Variant.Outlined">
+                        <MudSelectItem Value="VideoFormat.Unspecified">None</MudSelectItem>
+                        <MudSelectItem Value="VideoFormat.Mp4">MP4</MudSelectItem>
+                        <MudSelectItem Value="VideoFormat.Mkv">MKV</MudSelectItem>
+                        <MudSelectItem Value="VideoFormat.Webm">WebM</MudSelectItem>
+                        <MudSelectItem Value="VideoFormat.Gif">GIF</MudSelectItem>
+                    </MudSelect>
+                    <MudSelect @bind-Value="_convertAudio" Label="Audio Format" Variant="Variant.Outlined">
+                        <MudSelectItem Value="AudioFormat.Unspecified">None</MudSelectItem>
+                        <MudSelectItem Value="AudioFormat.Mp3">MP3</MudSelectItem>
+                        <MudSelectItem Value="AudioFormat.Aac">AAC</MudSelectItem>
+                        <MudSelectItem Value="AudioFormat.Flac">FLAC</MudSelectItem>
+                        <MudSelectItem Value="AudioFormat.Opus">Opus</MudSelectItem>
+                    </MudSelect>
+                </MudStack>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        @* Download buttons *@
+        <MudDivider Class="my-2" />
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                   StartIcon="@Icons.Material.Filled.VideoFile">
+            Download Video
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                   StartIcon="@Icons.Material.Filled.AudioFile">
+            Download Audio
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                   StartIcon="@Icons.Material.Filled.Star">
+            Download Best
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private TimeSpan? _segmentStart;
+    private TimeSpan? _segmentDuration;
+    private int _cropTop, _cropBottom, _cropLeft, _cropRight;
+    private VideoFormat _convertVideo = VideoFormat.Unspecified;
+    private AudioFormat _convertAudio = AudioFormat.Unspecified;
+}

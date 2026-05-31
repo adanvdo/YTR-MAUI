@@ -1,0 +1,39 @@
+@page "/history"
+@inject IHistoryService HistoryService
+
+<PageTitle>YTR - History</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Download History</MudText>
+
+<MudDataGrid T="DownloadRecord" Items="_records" Dense="true" Hover="true" Striped="true"
+             Loading="_loading" SortMode="SortMode.Single" Filterable="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Title" Title="Title" />
+        <PropertyColumn Property="x => x.Platform" Title="Platform" />
+        <PropertyColumn Property="x => x.StreamKind" Title="Type" />
+        <PropertyColumn Property="x => x.DownloadedAt" Title="Downloaded" Format="g" />
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small"
+                               OnClick="@(() => OpenLocation(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<DownloadRecord> _records = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _records = await HistoryService.GetAllAsync();
+        _loading = false;
+    }
+
+    private Task OpenLocation(DownloadRecord record)
+    {
+        // Will be wired to IPlatformService.OpenFolderAsync
+        return Task.CompletedTask;
+    }
+}

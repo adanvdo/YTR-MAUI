@@ -1,0 +1,52 @@
+@inject IUrlAnalyzer UrlAnalyzer
+
+<MudPaper Class="pa-4" Elevation="1">
+    <MudGrid>
+        <MudItem xs="12" sm="9" md="10">
+            <MudTextField @bind-Value="_url" Label="Media URL or Video ID"
+                          Variant="Variant.Outlined" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Link"
+                          Immediate="true" OnKeyDown="OnKeyDown"
+                          Placeholder="Paste a YouTube, Reddit, Twitter, Twitch, Vimeo, Instagram, or TikTok URL" />
+        </MudItem>
+        <MudItem xs="12" sm="3" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                       OnClick="ListFormats" Disabled="_loading">
+                @if (_loading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                List Formats
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@code {
+    private string _url = string.Empty;
+    private bool _loading;
+
+    [Parameter] public EventCallback<UrlAnalysisResult> OnUrlAnalyzed { get; set; }
+
+    private async Task ListFormats()
+    {
+        if (string.IsNullOrWhiteSpace(_url)) return;
+
+        _loading = true;
+        try
+        {
+            var result = UrlAnalyzer.Analyze(_url);
+            await OnUrlAnalyzed.InvokeAsync(result);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await ListFormats();
+    }
+}
