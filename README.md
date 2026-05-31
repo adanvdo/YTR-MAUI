@@ -64,6 +64,9 @@ dotnet run --project YTR.Maui/YTR.Maui.csproj -f net10.0-windows10.0.19041.0
 - [x] Phase 1: Core library foundation (models, enums, interfaces, EF Core, UrlAnalyzer, HistoryService)
 - [x] Phase 2: Blazor UI skeleton (Home, History, Settings, Updates pages + shared components)
 - [x] Phase 3: MAUI host wired up (DI, MudBlazor, routing)
-- [ ] Phase 4: Download engine implementation (IYtDlpService, IMediaProcessor)
-- [ ] Phase 5: Data migration from old app
-- [ ] Phase 6: Platform features (tray, hotkeys, share intent)
+- [x] Phase 4: Download engine (YtDlpService, FfmpegMediaProcessor, DownloadOrchestrator, ProcessRunner, SettingsService)
+- [x] Phase 5: Data migration service (legacy settings.json + history.json → new format)
+- [x] Phase 6: Platform features (hotkey, tray, single-instance, notifications, quick-download, window sizing)
+- [ ] Tray icon visual (needs H.NotifyIcon.WinUI or Shell_NotifyIcon wrapper)
+- [ ] Android share intent receiver
+- [ ] End-to-end integration testing

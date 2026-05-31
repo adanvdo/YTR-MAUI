@@ -1,22 +1,131 @@
 @page "/"
+@inject IYtDlpService YtDlp
+@inject IDownloadOrchestrator Orchestrator
+@inject IUrlAnalyzer UrlAnalyzer
+@inject DownloadStateService State
 
 <PageTitle>YTR - Home</PageTitle>
 
 <MudGrid>
     <MudItem xs="12">
-        <InputPanel />
+        <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" />
     </MudItem>
 
     <MudItem xs="12" md="8">
-        <VideoInfoPanel />
-        <FormatGrid Class="mt-4" />
+        <VideoInfoPanel Metadata="_metadata" />
+        <FormatGrid Class="mt-4" Formats="_formats" FormatSelected="OnFormatSelected" />
     </MudItem>
 
     <MudItem xs="12" md="4">
-        <ControlPanel />
+        <ControlPanel OnDownloadVideo="DownloadVideo"
+                      OnDownloadAudio="DownloadAudio"
+                      OnDownloadBest="DownloadBest"
+                      Disabled="_downloading" />
     </MudItem>
 
     <MudItem xs="12">
         <StatusBar />
     </MudItem>
 </MudGrid>
+
+@code {
+    private MediaMetadata? _metadata;
+    private IReadOnlyList<FormatInfo>? _formats;
+    private FormatInfo? _selectedFormat;
+    private bool _downloading;
+
+    private async Task OnUrlAnalyzed(UrlAnalysisResult analysis)
+    {
+        if (!analysis.IsValid) return;
+
+        State.UpdateStatus("Fetching formats...");
+        _metadata = null;
+        _formats = null;
+        StateHasChanged();
+
+        var result = analysis.IsPlaylist
+            ? await YtDlp.GetPlaylistInfoAsync(analysis.NormalizedUrl)
+            : await YtDlp.GetMediaInfoAsync(analysis.NormalizedUrl);
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _metadata = result.Value;
+            _formats = result.Value.Formats;
+            State.UpdateStatus($"Found {_formats.Count} formats.");
+        }
+        else
+        {
+            State.UpdateStatus($"Error: {result.Error}");
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnFormatSelected(FormatInfo format)
+    {
+        _selectedFormat = format;
+    }
+
+    private async Task DownloadVideo(DownloadRequest request)
+    {
+        await ExecuteDownload(StreamKind.Video, request);
+    }
+
+    private async Task DownloadAudio(DownloadRequest request)
+    {
+        await ExecuteDownload(StreamKind.Audio, request);
+    }
+
+    private async Task DownloadBest(DownloadRequest request)
+    {
+        await ExecuteDownload(StreamKind.AudioAndVideo, request);
+    }
+
+    private async Task ExecuteDownload(StreamKind streamKind, DownloadRequest request)
+    {
+        if (_metadata is null) return;
+
+        _downloading = true;
+        StateHasChanged();
+
+        var progress = new Progress<DownloadProgress>(p => 
+        {
+            State.UpdateProgress(p);
+            InvokeAsync(StateHasChanged);
+        });
+        var output = new Progress<string>(msg => State.UpdateStatus(msg));
+
+        try
+        {
+            Result<DownloadRecord> result;
+
+            if (_selectedFormat is not null)
+            {
+                var pair = new FormatPair
+                {
+                    VideoFormat = _selectedFormat.StreamKind != StreamKind.Audio ? _selectedFormat : null,
+                    AudioFormat = _selectedFormat.StreamKind == StreamKind.Audio ? _selectedFormat : null
+                };
+                result = await Orchestrator.DownloadFormatAsync(_metadata.Url, pair, request, progress, output);
+            }
+            else
+            {
+                result = await Orchestrator.DownloadBestAsync(_metadata.Url, streamKind, request, progress, output);
+            }
+
+            if (result.IsSuccess)
+                State.UpdateStatus($"Complete: {result.Value!.Title}");
+            else
+                State.UpdateStatus($"Failed: {result.Error}");
+        }
+        catch (Exception ex)
+        {
+            State.UpdateStatus($"Error: {ex.Message}");
+        }
+        finally
+        {
+            _downloading = false;
+            StateHasChanged();
+        }
+    }
+}

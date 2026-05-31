@@ -1,39 +1,287 @@
 @page "/updates"
+@inject IAppUpdateService AppUpdater
+@inject IDependencyUpdateService DependencyUpdater
+@inject ISettingsService Settings
 
 <PageTitle>YTR - Updates</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-4">Updates</MudText>
 
 <MudGrid>
+    @* App Updates *@
     <MudItem xs="12" md="6">
         <MudCard>
             <MudCardHeader>
                 <MudText Typo="Typo.h6">Application</MudText>
             </MudCardHeader>
             <MudCardContent>
-                <MudText>Check for new YTR releases.</MudText>
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.body2">Current: v@(GetCurrentVersion())</MudText>
+                    @if (_appCheckError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">@_appCheckError</MudAlert>
+                    }
+                    else if (_availableRelease is not null)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            v@(_availableRelease.Version) available (released @(_availableRelease.ReleaseDate.ToShortDateString()))
+                        </MudAlert>
+                    }
+                    else if (_appChecked)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Success">You're up to date.</MudText>
+                    }
+                </MudStack>
+                @if (_appDownloading)
+                {
+                    <MudProgressLinear Value="@(_appProgress * 100)" Class="mt-2" Color="Color.Primary" />
+                }
             </MudCardContent>
             <MudCardActions>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Check for Updates</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           Disabled="_appChecking || _appDownloading"
+                           OnClick="CheckForAppUpdate">
+                    @if (_appChecking) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                    Check for Updates
+                </MudButton>
+                @if (_availableRelease is not null && _downloadedPackagePath is null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                               Disabled="_appDownloading"
+                               OnClick="DownloadAppUpdate">
+                        Download
+                    </MudButton>
+                }
+                @if (_downloadedPackagePath is not null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Warning" Class="ml-2"
+                               OnClick="InstallAppUpdate">
+                        Install &amp; Restart
+                    </MudButton>
+                }
             </MudCardActions>
         </MudCard>
     </MudItem>
 
+    @* Dependency Updates *@
     <MudItem xs="12" md="6">
         <MudCard>
             <MudCardHeader>
                 <MudText Typo="Typo.h6">Dependencies</MudText>
             </MudCardHeader>
             <MudCardContent>
-                <MudStack Spacing="1">
-                    <MudText Typo="Typo.body2">yt-dlp: checking...</MudText>
-                    <MudText Typo="Typo.body2">FFmpeg: checking...</MudText>
+                <MudStack Spacing="2">
+                    @* yt-dlp *@
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.body2" Style="min-width:80px;"><b>yt-dlp</b></MudText>
+                        <MudText Typo="Typo.body2">Installed: @(Settings.Updates.YtDlpLocalVersion ?? "unknown")</MudText>
+                        @if (_latestYtDlp is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">Latest: @_latestYtDlp</MudChip>
+                        }
+                    </MudStack>
+
+                    @* FFmpeg *@
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.body2" Style="min-width:80px;"><b>FFmpeg</b></MudText>
+                        <MudText Typo="Typo.body2">Installed: @(Settings.Updates.FfmpegLocalVersion ?? "unknown")</MudText>
+                        @if (_latestFfmpeg is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">Latest: @_latestFfmpeg</MudChip>
+                        }
+                    </MudStack>
+
+                    @if (_depError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">@_depError</MudAlert>
+                    }
                 </MudStack>
+
+                @if (_depUpdating)
+                {
+                    <MudProgressLinear Value="@(_depProgress * 100)" Class="mt-2" Color="Color.Secondary" />
+                }
             </MudCardContent>
             <MudCardActions>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mr-2">Update yt-dlp</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary">Update FFmpeg</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           Disabled="_depChecking || _depUpdating"
+                           OnClick="CheckDependencyVersions">
+                    @if (_depChecking) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                    Check Versions
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                           Disabled="@(_depUpdating || _latestYtDlp is null)"
+                           OnClick="UpdateYtDlp">
+                    Update yt-dlp
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                           Disabled="@(_depUpdating || _latestFfmpeg is null)"
+                           OnClick="UpdateFfmpeg">
+                    Update FFmpeg
+                </MudButton>
             </MudCardActions>
         </MudCard>
     </MudItem>
 </MudGrid>
+
+@code {
+    // App update state
+    private bool _appChecking;
+    private bool _appChecked;
+    private bool _appDownloading;
+    private double _appProgress;
+    private string? _appCheckError;
+    private AppRelease? _availableRelease;
+    private string? _downloadedPackagePath;
+
+    // Dependency update state
+    private bool _depChecking;
+    private bool _depUpdating;
+    private double _depProgress;
+    private string? _depError;
+    private string? _latestYtDlp;
+    private string? _latestFfmpeg;
+
+    private static string GetCurrentVersion()
+    {
+        var asm = System.Reflection.Assembly.GetEntryAssembly();
+        return asm?.GetName().Version?.ToString(3) ?? "0.0.0";
+    }
+
+    private async Task CheckForAppUpdate()
+    {
+        _appChecking = true;
+        _appCheckError = null;
+        _availableRelease = null;
+        _downloadedPackagePath = null;
+        StateHasChanged();
+
+        var result = await AppUpdater.CheckForUpdateAsync(Settings.Updates.Channel);
+
+        if (result.IsSuccess)
+        {
+            _availableRelease = result.Value;
+            _appChecked = true;
+        }
+        else
+        {
+            _appCheckError = result.Error;
+        }
+
+        _appChecking = false;
+        StateHasChanged();
+    }
+
+    private async Task DownloadAppUpdate()
+    {
+        if (_availableRelease is null) return;
+
+        _appDownloading = true;
+        _appProgress = 0;
+        StateHasChanged();
+
+        var progress = new Progress<double>(p =>
+        {
+            _appProgress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        var result = await AppUpdater.DownloadUpdateAsync(_availableRelease, progress);
+
+        if (result.IsSuccess)
+        {
+            _downloadedPackagePath = result.Value;
+        }
+        else
+        {
+            _appCheckError = result.Error;
+        }
+
+        _appDownloading = false;
+        StateHasChanged();
+    }
+
+    private async Task InstallAppUpdate()
+    {
+        if (_downloadedPackagePath is null) return;
+        await AppUpdater.InstallUpdateAsync(_downloadedPackagePath);
+    }
+
+    private async Task CheckDependencyVersions()
+    {
+        _depChecking = true;
+        _depError = null;
+        _latestYtDlp = null;
+        _latestFfmpeg = null;
+        StateHasChanged();
+
+        var ytTask = DependencyUpdater.GetLatestYtDlpVersionAsync();
+        var ffTask = DependencyUpdater.GetLatestFfmpegVersionAsync();
+
+        await Task.WhenAll(ytTask, ffTask);
+
+        var ytResult = await ytTask;
+        var ffResult = await ffTask;
+
+        if (ytResult.IsSuccess) _latestYtDlp = ytResult.Value;
+        if (ffResult.IsSuccess) _latestFfmpeg = ffResult.Value;
+
+        if (ytResult.IsFailure && ffResult.IsFailure)
+            _depError = $"yt-dlp: {ytResult.Error} | FFmpeg: {ffResult.Error}";
+        else if (ytResult.IsFailure)
+            _depError = $"yt-dlp check failed: {ytResult.Error}";
+        else if (ffResult.IsFailure)
+            _depError = $"FFmpeg check failed: {ffResult.Error}";
+
+        _depChecking = false;
+        StateHasChanged();
+    }
+
+    private async Task UpdateYtDlp()
+    {
+        _depUpdating = true;
+        _depProgress = 0;
+        _depError = null;
+        StateHasChanged();
+
+        var progress = new Progress<double>(p =>
+        {
+            _depProgress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        var result = await DependencyUpdater.UpdateYtDlpAsync(progress);
+
+        if (result.IsFailure)
+            _depError = result.Error;
+        else
+            _latestYtDlp = null; // Clear "latest" chip since we're now up to date
+
+        _depUpdating = false;
+        StateHasChanged();
+    }
+
+    private async Task UpdateFfmpeg()
+    {
+        _depUpdating = true;
+        _depProgress = 0;
+        _depError = null;
+        StateHasChanged();
+
+        var progress = new Progress<double>(p =>
+        {
+            _depProgress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        var result = await DependencyUpdater.UpdateFfmpegAsync(progress);
+
+        if (result.IsFailure)
+            _depError = result.Error;
+        else
+            _latestFfmpeg = null;
+
+        _depUpdating = false;
+        StateHasChanged();
+    }
+}

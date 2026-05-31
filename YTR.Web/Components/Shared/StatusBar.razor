@@ -1,26 +1,38 @@
+@inject DownloadStateService State
+@implements IDisposable
+
 <MudPaper Class="pa-2 mt-4" Elevation="0" Style="background: transparent;">
-    @if (_isDownloading)
+    @if (State.IsDownloading)
     {
-        <MudProgressLinear Value="_progress" Color="Color.Primary" Rounded="true" Size="Size.Medium">
-            <MudText Typo="Typo.caption">@_statusMessage</MudText>
+        <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
+                           Rounded="true" Size="Size.Medium">
+            <MudText Typo="Typo.caption">
+                @State.StatusMessage
+                @if (State.CurrentProgress.Speed is not null)
+                {
+                    <text> — @State.CurrentProgress.Speed</text>
+                }
+                @if (State.CurrentProgress.Eta is not null)
+                {
+                    <text> (ETA: @State.CurrentProgress.Eta)</text>
+                }
+            </MudText>
         </MudProgressLinear>
     }
-    else if (!string.IsNullOrEmpty(_statusMessage))
+    else
     {
-        <MudText Typo="Typo.caption" Color="Color.Tertiary">@_statusMessage</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Tertiary">@State.StatusMessage</MudText>
     }
 </MudPaper>
 
 @code {
-    private bool _isDownloading;
-    private double _progress;
-    private string _statusMessage = "Ready";
-
-    [Parameter] public string? Message { get; set; }
-
-    protected override void OnParametersSet()
+    protected override void OnInitialized()
     {
-        if (Message is not null)
-            _statusMessage = Message;
+        State.OnStateChanged += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        State.OnStateChanged -= StateHasChanged;
     }
 }

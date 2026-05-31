@@ -1,8 +1,9 @@
+@using YTR.Core.Services
+
 <MudPaper Class="pa-4" Elevation="1">
     <MudText Typo="Typo.subtitle1" Class="mb-3">Download Options</MudText>
 
     <MudStack Spacing="3">
-        @* Segment extraction *@
         <MudExpansionPanels>
             <MudExpansionPanel Text="Segment" Expanded="false">
                 <MudStack Spacing="2">
@@ -40,19 +41,21 @@
             </MudExpansionPanel>
         </MudExpansionPanels>
 
-        @* Download buttons *@
         <MudDivider Class="my-2" />
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.VideoFile">
+                   StartIcon="@Icons.Material.Filled.VideoFile"
+                   Disabled="Disabled" OnClick="OnClickDownloadVideo">
             Download Video
         </MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.AudioFile">
+                   StartIcon="@Icons.Material.Filled.AudioFile"
+                   Disabled="Disabled" OnClick="OnClickDownloadAudio">
             Download Audio
         </MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.Star">
+                   StartIcon="@Icons.Material.Filled.Star"
+                   Disabled="Disabled" OnClick="OnClickDownloadBest">
             Download Best
         </MudButton>
     </MudStack>
@@ -64,4 +67,29 @@
     private int _cropTop, _cropBottom, _cropLeft, _cropRight;
     private VideoFormat _convertVideo = VideoFormat.Unspecified;
     private AudioFormat _convertAudio = AudioFormat.Unspecified;
+
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<DownloadRequest> OnDownloadVideo { get; set; }
+    [Parameter] public EventCallback<DownloadRequest> OnDownloadAudio { get; set; }
+    [Parameter] public EventCallback<DownloadRequest> OnDownloadBest { get; set; }
+
+    private DownloadRequest BuildRequest()
+    {
+        int[]? crops = null;
+        if (_cropTop > 0 || _cropBottom > 0 || _cropLeft > 0 || _cropRight > 0)
+            crops = [_cropLeft, _cropTop, _cropRight - _cropLeft, _cropBottom - _cropTop];
+
+        return new DownloadRequest
+        {
+            SegmentStart = _segmentStart,
+            SegmentDuration = _segmentDuration,
+            CropValues = crops,
+            ConvertVideo = _convertVideo != VideoFormat.Unspecified ? _convertVideo : null,
+            ConvertAudio = _convertAudio != AudioFormat.Unspecified ? _convertAudio : null
+        };
+    }
+
+    private async Task OnClickDownloadVideo() => await OnDownloadVideo.InvokeAsync(BuildRequest());
+    private async Task OnClickDownloadAudio() => await OnDownloadAudio.InvokeAsync(BuildRequest());
+    private async Task OnClickDownloadBest() => await OnDownloadBest.InvokeAsync(BuildRequest());
 }
