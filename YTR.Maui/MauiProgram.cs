@@ -39,6 +39,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IHotkeyService, Platforms.Windows.WindowsHotkeyService>();
         builder.Services.AddSingleton<ITrayService, Platforms.Windows.WindowsTrayService>();
         builder.Services.AddSingleton<INotificationService, Platforms.Windows.WindowsNotificationService>();
+        builder.Services.AddSingleton<IFolderPickerService, Platforms.Windows.WindowsFolderPickerService>();
         builder.Services.AddSingleton<Platforms.Windows.QuickDownloadHandler>();
         builder.Services.AddSingleton<Platforms.Windows.SingleInstanceGuard>();
 #elif ANDROID

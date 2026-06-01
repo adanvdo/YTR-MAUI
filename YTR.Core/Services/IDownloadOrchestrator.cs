@@ -29,6 +29,19 @@ public interface IDownloadOrchestrator
         IProgress<DownloadProgress>? progress = null,
         IProgress<string>? output = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Downloads all selected items from a playlist sequentially.
+    /// </summary>
+    Task<Result<int>> DownloadPlaylistAsync(
+        string playlistUrl,
+        IReadOnlyList<PlaylistItem> selectedItems,
+        StreamKind streamKind,
+        DownloadRequest? request = null,
+        IProgress<DownloadProgress>? progress = null,
+        IProgress<string>? output = null,
+        IProgress<PlaylistProgress>? playlistProgress = null,
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -44,3 +57,8 @@ public sealed record DownloadRequest
     public bool EmbedThumbnail { get; init; }
     public string? PlaylistFolder { get; init; }
 }
+
+/// <summary>
+/// Progress for playlist batch downloads.
+/// </summary>
+public sealed record PlaylistProgress(int Completed, int Total, string? CurrentTitle);

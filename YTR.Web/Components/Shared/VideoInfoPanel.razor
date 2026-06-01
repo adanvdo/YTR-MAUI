@@ -23,7 +23,7 @@
                 }
                 @if (!string.IsNullOrEmpty(Metadata.Description))
                 {
-                    <MudText Typo="Typo.body2" Class="mt-2" Style="max-height:100px;overflow:auto;">
+                    <MudText Typo="Typo.body2" Class="mt-2" Style="max-height:100px;overflow-y:auto;overflow-x:hidden;word-break:break-word;">
                         @Metadata.Description
                     </MudText>
                 }

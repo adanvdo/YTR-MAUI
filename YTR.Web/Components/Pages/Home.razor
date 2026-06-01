@@ -2,37 +2,59 @@
 @inject IYtDlpService YtDlp
 @inject IDownloadOrchestrator Orchestrator
 @inject IUrlAnalyzer UrlAnalyzer
+@inject ISettingsService Settings
+@inject IPlatformService Platform
 @inject DownloadStateService State
 
 <PageTitle>YTR - Home</PageTitle>
 
-<MudGrid>
-    <MudItem xs="12">
+<div class="home-layout">
+    <div class="home-input">
         <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" />
-    </MudItem>
+    </div>
 
-    <MudItem xs="12" md="8">
-        <VideoInfoPanel Metadata="_metadata" />
-        <FormatGrid Class="mt-4" Formats="_formats" FormatSelected="OnFormatSelected" />
-    </MudItem>
+    <div class="home-content">
+        <div class="home-main">
+            <VideoInfoPanel Metadata="_metadata" />
 
-    <MudItem xs="12" md="4">
-        <ControlPanel OnDownloadVideo="DownloadVideo"
-                      OnDownloadAudio="DownloadAudio"
-                      OnDownloadBest="DownloadBest"
-                      Disabled="_downloading" />
-    </MudItem>
+            @if (_metadata?.IsPlaylist == true && _metadata.PlaylistItems is not null)
+            {
+                <PlaylistGrid Class="mt-4" Items="_metadata.PlaylistItems"
+                              SelectionChanged="OnPlaylistSelectionChanged" />
+            }
+            else
+            {
+                <FormatGrid Class="mt-4" Formats="_formats"
+                            FormatPairSelected="OnFormatPairSelected"
+                            FormatSelected="OnFormatSelected" />
+            }
+        </div>
 
-    <MudItem xs="12">
+        <div class="home-sidebar">
+            <ControlPanel OnDownloadVideo="DownloadVideo"
+                          OnDownloadAudio="DownloadAudio"
+                          OnDownloadBest="DownloadBest"
+                          Disabled="_downloading"
+                          ShowDownloadSelected="_hasFormatSelection"
+                          SelectedPair="_selectedPair"
+                          ThumbnailUrl="@(_metadata?.ThumbnailUrl)"
+                          IsPlaylist="@(_metadata?.IsPlaylist == true)" />
+        </div>
+    </div>
+
+    <div class="home-status">
         <StatusBar />
-    </MudItem>
-</MudGrid>
+    </div>
+</div>
 
 @code {
     private MediaMetadata? _metadata;
     private IReadOnlyList<FormatInfo>? _formats;
+    private FormatPair? _selectedPair;
     private FormatInfo? _selectedFormat;
+    private IReadOnlyList<PlaylistItem>? _selectedPlaylistItems;
     private bool _downloading;
+    private bool _hasFormatSelection;
 
     private async Task OnUrlAnalyzed(UrlAnalysisResult analysis)
     {
@@ -41,6 +63,9 @@
         State.UpdateStatus("Fetching formats...");
         _metadata = null;
         _formats = null;
+        _selectedPair = null;
+        _selectedFormat = null;
+        _hasFormatSelection = false;
         StateHasChanged();
 
         var result = analysis.IsPlaylist
@@ -57,29 +82,29 @@
         {
             State.UpdateStatus($"Error: {result.Error}");
         }
-
         StateHasChanged();
     }
 
-    private void OnFormatSelected(FormatInfo format)
+    private void OnFormatPairSelected(FormatPair pair)
+    {
+        _selectedPair = pair;
+        _hasFormatSelection = pair.IsValid;
+        StateHasChanged();
+    }
+
+    private void OnFormatSelected(FormatInfo? format)
     {
         _selectedFormat = format;
     }
 
-    private async Task DownloadVideo(DownloadRequest request)
+    private void OnPlaylistSelectionChanged(IReadOnlyList<PlaylistItem> items)
     {
-        await ExecuteDownload(StreamKind.Video, request);
+        _selectedPlaylistItems = items;
     }
 
-    private async Task DownloadAudio(DownloadRequest request)
-    {
-        await ExecuteDownload(StreamKind.Audio, request);
-    }
-
-    private async Task DownloadBest(DownloadRequest request)
-    {
-        await ExecuteDownload(StreamKind.AudioAndVideo, request);
-    }
+    private async Task DownloadVideo(DownloadRequest request) => await ExecuteDownload(StreamKind.Video, request);
+    private async Task DownloadAudio(DownloadRequest request) => await ExecuteDownload(StreamKind.Audio, request);
+    private async Task DownloadBest(DownloadRequest request) => await ExecuteDownload(StreamKind.AudioAndVideo, request);
 
     private async Task ExecuteDownload(StreamKind streamKind, DownloadRequest request)
     {
@@ -88,7 +113,8 @@
         _downloading = true;
         StateHasChanged();
 
-        var progress = new Progress<DownloadProgress>(p => 
+        var ct = State.StartOperation();
+        var progress = new Progress<DownloadProgress>(p =>
         {
             State.UpdateProgress(p);
             InvokeAsync(StateHasChanged);
@@ -97,26 +123,39 @@
 
         try
         {
-            Result<DownloadRecord> result;
-
-            if (_selectedFormat is not null)
+            if (_metadata.IsPlaylist && _metadata.PlaylistItems is not null)
             {
-                var pair = new FormatPair
+                var items = _selectedPlaylistItems ?? _metadata.PlaylistItems;
+                var playlistProgress = new Progress<PlaylistProgress>(p =>
                 {
-                    VideoFormat = _selectedFormat.StreamKind != StreamKind.Audio ? _selectedFormat : null,
-                    AudioFormat = _selectedFormat.StreamKind == StreamKind.Audio ? _selectedFormat : null
-                };
-                result = await Orchestrator.DownloadFormatAsync(_metadata.Url, pair, request, progress, output);
+                    State.UpdatePlaylistProgress(p.Completed, p.Total);
+                    InvokeAsync(StateHasChanged);
+                });
+
+                var playlistRequest = request with { PlaylistFolder = _metadata.Title?.Replace(" ", "") ?? "Playlist" };
+                var result = await Orchestrator.DownloadPlaylistAsync(
+                    _metadata.Url, items, streamKind, playlistRequest, progress, output, playlistProgress, ct);
+
+                State.ResetPlaylist();
+                if (result.IsSuccess)
+                    State.UpdateStatus($"Playlist complete: {result.Value} items downloaded.");
+                else
+                    State.UpdateStatus($"Failed: {result.Error}");
+            }
+            else if (_selectedPair is not null && _selectedPair.IsValid)
+            {
+                var result = await Orchestrator.DownloadFormatAsync(_metadata.Url, _selectedPair, request, progress, output, ct);
+                HandleResult(result);
             }
             else
             {
-                result = await Orchestrator.DownloadBestAsync(_metadata.Url, streamKind, request, progress, output);
+                var result = await Orchestrator.DownloadBestAsync(_metadata.Url, streamKind, request, progress, output, ct);
+                HandleResult(result);
             }
-
-            if (result.IsSuccess)
-                State.UpdateStatus($"Complete: {result.Value!.Title}");
-            else
-                State.UpdateStatus($"Failed: {result.Error}");
+        }
+        catch (OperationCanceledException)
+        {
+            State.UpdateStatus("Download cancelled.");
         }
         catch (Exception ex)
         {
@@ -125,7 +164,24 @@
         finally
         {
             _downloading = false;
+            State.Reset();
             StateHasChanged();
+        }
+    }
+
+    private void HandleResult(Result<DownloadRecord> result)
+    {
+        if (result.IsSuccess)
+        {
+            State.UpdateStatus($"Complete: {result.Value!.Title}");
+            if (Settings.Download.AutoOpenDownloadLocation)
+            {
+                _ = Platform.OpenFolderAsync(result.Value.FilePath);
+            }
+        }
+        else
+        {
+            State.UpdateStatus($"Failed: {result.Error}");
         }
     }
 }

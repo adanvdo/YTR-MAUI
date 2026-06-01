@@ -2,10 +2,14 @@
 @inject IAppUpdateService AppUpdater
 @inject IDependencyUpdateService DependencyUpdater
 @inject ISettingsService Settings
+@inject NavigationManager Nav
 
 <PageTitle>YTR - Updates</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Updates</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
+    <MudText Typo="Typo.h5">Updates</MudText>
+</MudStack>
 
 <MudGrid>
     @* App Updates *@

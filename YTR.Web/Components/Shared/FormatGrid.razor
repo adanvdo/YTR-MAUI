@@ -1,27 +1,93 @@
+@inject ISettingsService Settings
+
 <MudPaper Class="@($"pa-4 {Class}")" Elevation="1">
-    <MudText Typo="Typo.subtitle1" Class="mb-2">Available Formats</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Spacing="2">
+        <MudText Typo="Typo.subtitle1">Formats</MudText>
+        <MudSpacer />
+        @* Stream type filter (item 21) *@
+        <MudToggleGroup T="StreamFilter" @bind-Value="_streamFilter" Color="Color.Primary"
+                         Size="Size.Small" SelectionMode="SelectionMode.SingleSelection">
+            <MudToggleItem Value="StreamFilter.All" Text="All" />
+            <MudToggleItem Value="StreamFilter.Video" Text="Video" />
+            <MudToggleItem Value="StreamFilter.Audio" Text="Audio" />
+        </MudToggleGroup>
+        @* Preset/Custom mode toggle (item 13) *@
+        <MudToggleGroup T="FormatMode" @bind-Value="_mode" Color="Color.Secondary"
+                         Size="Size.Small" SelectionMode="SelectionMode.SingleSelection">
+            <MudToggleItem Value="FormatMode.Preset" Text="Preset" />
+            <MudToggleItem Value="FormatMode.Custom" Text="Custom" />
+        </MudToggleGroup>
+    </MudStack>
 
     @if (Formats is null || Formats.Count == 0)
     {
         <MudText Typo="Typo.body2" Color="Color.Tertiary">No formats loaded.</MudText>
     }
+    else if (_mode == FormatMode.Preset)
+    {
+        @* Preset mode: single-select grid of pre-built pairs *@
+        <MudDataGrid T="PresetPair" Items="PresetPairs" Dense="true" Hover="true"
+                     SelectedItem="_selectedPreset" SelectedItemChanged="OnPresetSelected"
+                     SortMode="SortMode.Single">
+            <Columns>
+                <PropertyColumn Property="x => x.Resolution" Title="Resolution" />
+                <PropertyColumn Property="x => x.VideoCodec" Title="Video" />
+                <PropertyColumn Property="x => x.AudioCodec" Title="Audio" />
+                <PropertyColumn Property="x => x.Extension" Title="Ext" />
+                <PropertyColumn Property="x => x.Size" Title="Size" />
+            </Columns>
+        </MudDataGrid>
+    }
     else
     {
-        <MudDataGrid T="FormatInfo" Items="Formats" Dense="true" Hover="true"
-                     SelectedItem="_selectedFormat" SelectedItemChanged="OnFormatSelectionChanged"
-                     Filterable="true" SortMode="SortMode.Single">
+        @* Custom mode: dual-selection (item 14) *@
+        <div style="min-height: 40px;" class="mb-2">
+            @if (_selectedVideo is not null || _selectedAudio is not null)
+            {
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                    @if (_selectedVideo is not null)
+                    {
+                        var isCombo = _selectedVideo.StreamKind == StreamKind.AudioAndVideo;
+                        var chipIcon = isCombo ? Icons.Material.Filled.OndemandVideo : Icons.Material.Filled.Videocam;
+                        <MudPaper Class="d-flex align-center gap-1 pa-1 px-2" Elevation="0" Style="background: var(--mud-palette-primary); color: white; border-radius: 16px;">
+                            <MudIcon Icon="@chipIcon" Size="Size.Small" />
+                            <MudText Typo="Typo.caption">@(_selectedVideo.Format ?? _selectedVideo.FormatId)</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearVideo" Style="color: white;" />
+                        </MudPaper>
+                    }
+                    @if (_selectedAudio is not null)
+                    {
+                        <MudPaper Class="d-flex align-center gap-1 pa-1 px-2" Elevation="0" Style="background: var(--mud-palette-secondary); color: white; border-radius: 16px;">
+                            <MudIcon Icon="@Icons.Material.Filled.AudioFile" Size="Size.Small" />
+                            <MudText Typo="Typo.caption">@(_selectedAudio.Format ?? _selectedAudio.FormatId)</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearAudio" Style="color: white;" />
+                        </MudPaper>
+                    }
+                </MudStack>
+            }
+        </div>
+
+        <MudDataGrid T="FormatInfo" Items="FilteredFormats" Dense="true" Hover="true"
+                     RowClick="OnRowClick" SortMode="SortMode.Single"
+                     SelectOnRowClick="false"
+                     RowClassFunc="RowClassFunc" Class="format-grid">
             <Columns>
-                <PropertyColumn Property="x => x.FormatId" Title="ID" />
+                <TemplateColumn Title="" Width="30px" Sortable="false">
+                    <CellTemplate>
+                        @{
+                            var icon = GetRowIcon(context.Item);
+                        }
+                        <MudIcon Icon="@icon" Size="Size.Small" />
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Format" Title="Format" />
                 <PropertyColumn Property="x => x.Extension" Title="Ext" />
                 <PropertyColumn Property="x => x.Width" Title="W" />
                 <PropertyColumn Property="x => x.Height" Title="H" />
-                <PropertyColumn Property="x => x.VideoCodec" Title="Video Codec" />
-                <PropertyColumn Property="x => x.AudioCodec" Title="Audio Codec" />
-                <PropertyColumn Property="x => x.FormatNote" Title="Note" />
+                <PropertyColumn Property="x => x.VideoCodec" Title="VCodec" />
+                <PropertyColumn Property="x => x.AudioCodec" Title="ACodec" />
                 <TemplateColumn Title="Size">
-                    <CellTemplate>
-                        @FormatFileSize(context.Item)
-                    </CellTemplate>
+                    <CellTemplate>@FormatFileSize(context.Item)</CellTemplate>
                 </TemplateColumn>
             </Columns>
         </MudDataGrid>
@@ -31,15 +97,146 @@
 @code {
     [Parameter] public string? Class { get; set; }
     [Parameter] public IReadOnlyList<FormatInfo>? Formats { get; set; }
+    [Parameter] public EventCallback<FormatPair> FormatPairSelected { get; set; }
     [Parameter] public EventCallback<FormatInfo> FormatSelected { get; set; }
 
-    private FormatInfo? _selectedFormat;
+    private FormatMode _mode = FormatMode.Custom;
+    private StreamFilter _streamFilter = StreamFilter.All;
 
-    private async Task OnFormatSelectionChanged(FormatInfo format)
+    // Custom mode state (item 14)
+    private FormatInfo? _selectedVideo;
+    private FormatInfo? _selectedAudio;
+
+    // Preset mode state
+    private PresetPair? _selectedPreset;
+
+    private IReadOnlyList<FormatInfo>? _previousFormats;
+
+    protected override void OnParametersSet()
     {
-        _selectedFormat = format;
-        await FormatSelected.InvokeAsync(format);
+        _mode = Settings.Appearance.FormatMode;
+        // Only reset selections when the formats list actually changes
+        if (!ReferenceEquals(Formats, _previousFormats))
+        {
+            _selectedVideo = null;
+            _selectedAudio = null;
+            _selectedPreset = null;
+            _previousFormats = Formats;
+        }
     }
+
+    private IEnumerable<FormatInfo> FilteredFormats => (Formats ?? []).Where(f => _streamFilter switch
+    {
+        StreamFilter.Video => f.StreamKind is StreamKind.Video or StreamKind.AudioAndVideo,
+        StreamFilter.Audio => f.StreamKind == StreamKind.Audio,
+        _ => true
+    });
+
+    private IEnumerable<PresetPair> PresetPairs => BuildPresetPairs();
+
+    // --- Custom mode logic ---
+
+    private void OnRowClick(DataGridRowClickEventArgs<FormatInfo> args)
+    {
+        var format = args.Item;
+        if (format.StreamKind == StreamKind.Audio)
+        {
+            _selectedAudio = _selectedAudio == format ? null : format;
+        }
+        else
+        {
+            // Video or AudioAndVideo — if it has both, clear audio selection
+            if (_selectedVideo == format)
+            {
+                _selectedVideo = null;
+            }
+            else
+            {
+                _selectedVideo = format;
+                if (format.StreamKind == StreamKind.AudioAndVideo)
+                    _selectedAudio = null;
+            }
+        }
+        NotifySelection();
+    }
+
+    private void ClearVideo() { _selectedVideo = null; NotifySelection(); }
+    private void ClearAudio() { _selectedAudio = null; NotifySelection(); }
+
+    private void NotifySelection()
+    {
+        var pair = new FormatPair
+        {
+            VideoFormat = _selectedVideo?.StreamKind != StreamKind.Audio ? _selectedVideo : null,
+            AudioFormat = _selectedAudio ?? (_selectedVideo?.StreamKind == StreamKind.AudioAndVideo ? _selectedVideo : null)
+        };
+        FormatPairSelected.InvokeAsync(pair);
+        // Also fire single format for backward compat
+        FormatSelected.InvokeAsync(_selectedVideo ?? _selectedAudio);
+    }
+
+    private string RowClassFunc(FormatInfo item, int _)
+    {
+        if (item == _selectedVideo)
+            return "selected-video-row";
+        if (item == _selectedAudio)
+            return "selected-audio-row";
+        return string.Empty;
+    }
+
+    private string GetRowIcon(FormatInfo item) => item.StreamKind switch
+    {
+        StreamKind.Video => Icons.Material.Filled.Videocam,
+        StreamKind.Audio => Icons.Material.Filled.AudioFile,
+        StreamKind.AudioAndVideo => Icons.Material.Filled.OndemandVideo,
+        _ => Icons.Material.Filled.QuestionMark
+    };
+
+    // --- Preset mode logic (item 13) ---
+
+    private async Task OnPresetSelected(PresetPair pair)
+    {
+        _selectedPreset = pair;
+        if (pair is not null)
+        {
+            var formatPair = new FormatPair
+            {
+                VideoFormat = pair.VideoInfo,
+                AudioFormat = pair.AudioInfo
+            };
+            await FormatPairSelected.InvokeAsync(formatPair);
+            await FormatSelected.InvokeAsync(pair.VideoInfo ?? pair.AudioInfo);
+        }
+    }
+
+    private IEnumerable<PresetPair> BuildPresetPairs()
+    {
+        if (Formats is null) return [];
+
+        var videoFormats = Formats.Where(f => f.StreamKind is StreamKind.Video or StreamKind.AudioAndVideo)
+            .OrderByDescending(f => f.Height ?? 0).ToList();
+        var audioFormats = Formats.Where(f => f.StreamKind == StreamKind.Audio)
+            .OrderByDescending(f => f.AudioBitrate ?? 0).ToList();
+        var bestAudio = audioFormats.FirstOrDefault();
+
+        var pairs = new List<PresetPair>();
+
+        // Formats that already have audio+video
+        foreach (var f in videoFormats.Where(f => f.StreamKind == StreamKind.AudioAndVideo))
+        {
+            pairs.Add(new PresetPair(f, null));
+        }
+
+        // Video-only formats paired with best audio
+        foreach (var f in videoFormats.Where(f => f.StreamKind == StreamKind.Video))
+        {
+            pairs.Add(new PresetPair(f, bestAudio));
+        }
+
+        return pairs.OrderByDescending(p => p.VideoInfo?.Height ?? 0);
+    }
+
+    // --- Helpers ---
 
     private static string FormatFileSize(FormatInfo format)
     {
@@ -52,5 +249,25 @@
             < 1024 * 1024 * 1024 => $"{size / (1024.0 * 1024):F1} MB",
             _ => $"{size / (1024.0 * 1024 * 1024):F2} GB"
         };
+    }
+
+    private enum StreamFilter { All, Video, Audio }
+
+    /// <summary>Represents a pre-built video+audio pair for Preset mode.</summary>
+    private sealed record PresetPair(FormatInfo? VideoInfo, FormatInfo? AudioInfo)
+    {
+        public string Resolution => VideoInfo?.Height is not null ? $"{VideoInfo.Width}x{VideoInfo.Height}" : "Audio";
+        public string VideoCodec => VideoInfo?.VideoCodec ?? "—";
+        public string AudioCodec => AudioInfo?.AudioCodec ?? VideoInfo?.AudioCodec ?? "—";
+        public string Extension => VideoInfo?.Extension ?? AudioInfo?.Extension ?? "—";
+        public string Size
+        {
+            get
+            {
+                var s = VideoInfo?.FileSize ?? VideoInfo?.ApproximateFileSize;
+                if (s is null) return "—";
+                return $"{s / (1024.0 * 1024):F1} MB";
+            }
+        }
     }
 }

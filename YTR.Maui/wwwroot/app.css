@@ -2,6 +2,8 @@ html, body {
     font-family: 'Roboto', sans-serif;
     margin: 0;
     padding: 0;
+    overflow: hidden;
+    height: 100%;
 }
 
 .status-bar-safe-area {
@@ -33,4 +35,68 @@ html, body {
     position: absolute;
     right: 0.75rem;
     top: 0.5rem;
+}
+
+/* Format grid row selection highlights */
+.format-grid .selected-video-row td {
+    background-color: #7C4DFF !important;
+    color: white !important;
+}
+
+.format-grid .selected-audio-row td {
+    background-color: #ff4081 !important;
+    color: white !important;
+}
+
+.format-grid .selected-video-row:hover td {
+    background-color: #9c6fff !important;
+}
+
+.format-grid .selected-audio-row:hover td {
+    background-color: #ff6e9e !important;
+}
+
+/* Format grid: prevent text wrapping in cells for compact rows */
+.format-grid .mud-table-cell {
+    white-space: nowrap;
+}
+
+/* Home page fixed layout */
+.home-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.home-input {
+    flex-shrink: 0;
+}
+
+.home-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.home-main {
+    flex: 2;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+}
+
+.home-sidebar {
+    flex: 1;
+    overflow-y: auto;
+    min-width: 300px;
+    max-width: 380px;
+}
+
+.home-status {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 4px;
 }

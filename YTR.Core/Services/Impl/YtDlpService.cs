@@ -158,7 +158,7 @@ public sealed partial class YtDlpService : IYtDlpService
             formatString = $"bestvideo{resFilter}{sizeFilter}+bestaudio/best{resFilter}{sizeFilter}";
         }
 
-        var args = BuildDownloadArgs(url, formatString, outputTemplate, streamKind);
+        var args = BuildDownloadArgs(url, formatString, outputTemplate, streamKind, embedThumbnail: streamKind == StreamKind.Audio);
 
         string? downloadedFile = null;
         var request = new ProcessRequest
@@ -243,23 +243,48 @@ public sealed partial class YtDlpService : IYtDlpService
 
     #region Argument Building
 
-    private string BuildDownloadArgs(string url, string format, string outputTemplate, StreamKind streamKind)
+    private string BuildDownloadArgs(string url, string format, string outputTemplate, StreamKind streamKind, bool embedThumbnail = false, VideoFormat? mergeFormat = null)
     {
         var args = new List<string>
         {
             $"-f \"{format}\"",
             $"-o \"{outputTemplate}\"",
             "--no-playlist",
-            "--newline",  // Ensures progress lines are flushed
+            "--newline",
             "--restrict-filenames"
         };
 
+        // Merge output format (forces container for merged video+audio)
+        if (mergeFormat.HasValue && mergeFormat != VideoFormat.Unspecified && mergeFormat != VideoFormat.Gif)
+        {
+            args.Add($"--merge-output-format {VideoFormatToString(mergeFormat.Value)}");
+        }
+
+        // Preferred format conversion via yt-dlp (for "Download Preferred" flow)
         if (streamKind == StreamKind.Audio)
         {
             var preferred = _processingOptions.Value.PreferredAudioFormat;
             if (_processingOptions.Value.AlwaysConvertToPreferred && preferred != AudioFormat.Unspecified)
             {
                 args.Add($"-x --audio-format {AudioFormatToString(preferred)}");
+            }
+
+            // Embed thumbnail for audio downloads (not supported for opus/aac)
+            if (embedThumbnail && preferred != AudioFormat.Opus && preferred != AudioFormat.Aac)
+            {
+                args.Add("--embed-thumbnail");
+                args.Add("--add-metadata");
+                args.Add("--ppa \"ffmpeg:-write_id3v1 1 -id3v2_version 3\"");
+                args.Add("--convert-thumbnails jpg");
+            }
+        }
+        else if (_processingOptions.Value.AlwaysConvertToPreferred)
+        {
+            var preferredVideo = _processingOptions.Value.PreferredVideoFormat;
+            if (preferredVideo != VideoFormat.Unspecified && preferredVideo != VideoFormat.Gif)
+            {
+                args.Add($"--recode-video {VideoFormatToString(preferredVideo)}");
+                args.Add($"--merge-output-format {VideoFormatToString(preferredVideo)}");
             }
         }
 
@@ -282,6 +307,16 @@ public sealed partial class YtDlpService : IYtDlpService
         AudioFormat.Opus => "opus",
         AudioFormat.Vorbis => "vorbis",
         _ => "best"
+    };
+
+    private static string VideoFormatToString(VideoFormat format) => format switch
+    {
+        VideoFormat.Mp4 => "mp4",
+        VideoFormat.Mkv => "mkv",
+        VideoFormat.Webm => "webm",
+        VideoFormat.Flv => "flv",
+        VideoFormat.Ogg => "ogg",
+        _ => "mp4"
     };
 
     #endregion

@@ -21,3 +21,9 @@ obj/
 
 ## Windows
 Thumbs.db
+
+## Publish output
+publish/
+
+## Installer bundled tools (large binaries)
+installer/tools/*.exe

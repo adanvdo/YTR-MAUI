@@ -1,23 +1,37 @@
 @inject DownloadStateService State
 @implements IDisposable
 
-<MudPaper Class="pa-2 mt-4" Elevation="0" Style="background: transparent;">
+<MudPaper Class="pa-1 px-2" Elevation="0" Style="background: transparent; height: 30px; display: flex; align-items: center;">
     @if (State.IsDownloading)
     {
-        <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
-                           Rounded="true" Size="Size.Medium">
-            <MudText Typo="Typo.caption">
-                @State.StatusMessage
-                @if (State.CurrentProgress.Speed is not null)
-                {
-                    <text> — @State.CurrentProgress.Speed</text>
-                }
-                @if (State.CurrentProgress.Eta is not null)
-                {
-                    <text> (ETA: @State.CurrentProgress.Eta)</text>
-                }
-            </MudText>
-        </MudProgressLinear>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
+                               Rounded="true" Size="Size.Medium" Style="flex:1;">
+                <MudText Typo="Typo.caption">
+                    @State.StatusMessage
+                    @if (State.CurrentProgress.Speed is not null)
+                    {
+                        <text> — @State.CurrentProgress.Speed</text>
+                    }
+                    @if (State.CurrentProgress.Eta is not null)
+                    {
+                        <text> (ETA: @State.CurrentProgress.Eta)</text>
+                    }
+                </MudText>
+            </MudProgressLinear>
+            @if (State.CanCancel)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
+                               Size="Size.Small" OnClick="State.Cancel" />
+            }
+        </MudStack>
+        @if (State.IsPlaylistDownload)
+        {
+            <MudProgressLinear Value="@((double)State.PlaylistCompleted / State.PlaylistTotal * 100)"
+                               Color="Color.Secondary" Rounded="true" Size="Size.Small" Class="mt-1">
+                <MudText Typo="Typo.caption">@State.PlaylistCompleted / @State.PlaylistTotal</MudText>
+            </MudProgressLinear>
+        }
     }
     else
     {
@@ -28,11 +42,16 @@
 @code {
     protected override void OnInitialized()
     {
-        State.OnStateChanged += StateHasChanged;
+        State.OnStateChanged += OnStateChanged;
+    }
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
-        State.OnStateChanged -= StateHasChanged;
+        State.OnStateChanged -= OnStateChanged;
     }
 }

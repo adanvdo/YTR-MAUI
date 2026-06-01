@@ -13,7 +13,13 @@ public interface ISettingsService
     AppearanceOptions Appearance { get; }
     UpdateOptions Updates { get; }
     HistoryOptions History { get; }
+    WindowStateOptions WindowState { get; }
 
     Task LoadAsync(CancellationToken ct = default);
     Task SaveAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates current settings. Returns null if valid, or an error message.
+    /// </summary>
+    string? Validate();
 }

@@ -15,4 +15,9 @@ public interface IHistoryService
     Task DeleteAsync(Guid id, CancellationToken ct = default);
     Task CleanExpiredAsync(int retentionDays, CancellationToken ct = default);
     Task ClearAsync(StreamKind? filter = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Clears history records and optionally deletes the associated files from disk.
+    /// </summary>
+    Task ClearWithFilesAsync(StreamKind? filter = null, CancellationToken ct = default);
 }

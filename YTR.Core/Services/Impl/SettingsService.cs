@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using YTR.Core.Configuration;
+using YTR.Core.Enums;
 
 namespace YTR.Core.Services.Impl;
 
@@ -27,6 +28,7 @@ public sealed class SettingsService : ISettingsService
     public AppearanceOptions Appearance { get; private set; } = new();
     public UpdateOptions Updates { get; private set; } = new();
     public HistoryOptions History { get; private set; } = new();
+    public WindowStateOptions WindowState { get; private set; } = new();
 
     public SettingsService(IPlatformService platform, ILogger<SettingsService> logger)
     {
@@ -61,6 +63,7 @@ public sealed class SettingsService : ISettingsService
                 Appearance = container.Appearance ?? new();
                 Updates = container.Updates ?? new();
                 History = container.History ?? new();
+                WindowState = container.WindowState ?? new();
             }
 
             _logger.LogInformation("Settings loaded from {Path}", _settingsPath);
@@ -97,7 +100,8 @@ public sealed class SettingsService : ISettingsService
             Processing = Processing,
             Appearance = Appearance,
             Updates = Updates,
-            History = History
+            History = History,
+            WindowState = WindowState
         };
 
         var json = JsonSerializer.Serialize(container, JsonOptions);
@@ -125,5 +129,17 @@ public sealed class SettingsService : ISettingsService
         public AppearanceOptions? Appearance { get; set; }
         public UpdateOptions? Updates { get; set; }
         public HistoryOptions? History { get; set; }
+        public WindowStateOptions? WindowState { get; set; }
+    }
+
+    public string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Download.VideoDownloadPath))
+            return "Video download path is required.";
+        if (string.IsNullOrWhiteSpace(Download.AudioDownloadPath))
+            return "Audio download path is required.";
+        if (Processing.PreferredVideoFormat == VideoFormat.Gif)
+            return "Preferred video format cannot be GIF.";
+        return null;
     }
 }

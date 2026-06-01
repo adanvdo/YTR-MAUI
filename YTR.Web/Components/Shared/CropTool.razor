@@ -1,0 +1,182 @@
+@* Visual crop tool: draw a rectangle on the thumbnail to calculate crop values *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Crop Video</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.caption" Color="Color.Tertiary">
+                Draw a rectangle on the image to define the visible area. The crop values will be calculated based on the selected video resolution (@VideoWidth x @VideoHeight).
+            </MudText>
+
+            <div class="crop-container" @ref="_containerRef"
+                 @onmousedown="OnMouseDown" @onmousemove="OnMouseMove" @onmouseup="OnMouseUp"
+                 style="position:relative; display:inline-block; user-select:none; cursor:crosshair;">
+                <img src="@ThumbnailUrl" style="display:block; max-width:100%; height:auto;" />
+                @if (_isDragging || _hasSelection)
+                {
+                    <div class="crop-overlay" style="@OverlayStyle"></div>
+                    <div class="crop-selection" style="@SelectionStyle"></div>
+                }
+            </div>
+
+            @if (_hasSelection)
+            {
+                <MudGrid>
+                    <MudItem xs="3"><MudText Typo="Typo.caption">Top: @_cropTop px</MudText></MudItem>
+                    <MudItem xs="3"><MudText Typo="Typo.caption">Bottom: @_cropBottom px</MudText></MudItem>
+                    <MudItem xs="3"><MudText Typo="Typo.caption">Left: @_cropLeft px</MudText></MudItem>
+                    <MudItem xs="3"><MudText Typo="Typo.caption">Right: @_cropRight px</MudText></MudItem>
+                </MudGrid>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Apply" Disabled="!_hasSelection">
+            Apply Crop
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? MudDialog { get; set; }
+
+    [Parameter] public string ThumbnailUrl { get; set; } = string.Empty;
+    [Parameter] public int VideoWidth { get; set; }
+    [Parameter] public int VideoHeight { get; set; }
+
+    private ElementReference _containerRef;
+    private bool _isDragging;
+    private bool _hasSelection;
+
+    // Mouse positions relative to the image (as percentages 0-100)
+    private double _startX, _startY;
+    private double _currentX, _currentY;
+
+    // Calculated crop values in video pixels
+    private int _cropTop, _cropBottom, _cropLeft, _cropRight;
+
+    // Selection rectangle as percentages
+    private double SelLeft => Math.Min(_startX, _currentX);
+    private double SelTop => Math.Min(_startY, _currentY);
+    private double SelWidth => Math.Abs(_currentX - _startX);
+    private double SelHeight => Math.Abs(_currentY - _startY);
+
+    private string SelectionStyle =>
+        $"position:absolute; left:{SelLeft:F2}%; top:{SelTop:F2}%; width:{SelWidth:F2}%; height:{SelHeight:F2}%; " +
+        "border: 2px solid #7C4DFF; background: rgba(124, 77, 255, 0.15); pointer-events:none; box-sizing:border-box;";
+
+    private string OverlayStyle =>
+        "position:absolute; inset:0; background: rgba(0,0,0,0.5); pointer-events:none; " +
+        $"clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, " +
+        $"{SelLeft:F2}% {SelTop:F2}%, {SelLeft:F2}% {(SelTop + SelHeight):F2}%, " +
+        $"{(SelLeft + SelWidth):F2}% {(SelTop + SelHeight):F2}%, {(SelLeft + SelWidth):F2}% {SelTop:F2}%, {SelLeft:F2}% {SelTop:F2}%);";
+
+    private void OnMouseDown(MouseEventArgs e)
+    {
+        _isDragging = true;
+        _hasSelection = false;
+        var (px, py) = GetPercentPosition(e);
+        _startX = px;
+        _startY = py;
+        _currentX = px;
+        _currentY = py;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (!_isDragging) return;
+        var (px, py) = GetPercentPosition(e);
+        _currentX = Math.Clamp(px, 0, 100);
+        _currentY = Math.Clamp(py, 0, 100);
+    }
+
+    private void OnMouseUp(MouseEventArgs e)
+    {
+        if (!_isDragging) return;
+        _isDragging = false;
+
+        if (SelWidth > 1 && SelHeight > 1)
+        {
+            _hasSelection = true;
+            CalculateCropValues();
+        }
+    }
+
+    private void CalculateCropValues()
+    {
+        // The thumbnail may have a different aspect ratio than the video.
+        // We need to map the selection rectangle (in thumbnail %) to video pixel crop values.
+        // Crop values = pixels removed from each edge.
+
+        double thumbAspect = 16.0 / 9.0; // Thumbnails are typically 16:9
+        double videoAspect = (double)VideoWidth / VideoHeight;
+
+        // Determine the effective display area within the thumbnail
+        // (letterboxed or pillarboxed if aspects differ)
+        double effectiveLeft = 0, effectiveTop = 0, effectiveWidth = 100, effectiveHeight = 100;
+
+        if (Math.Abs(thumbAspect - videoAspect) > 0.01)
+        {
+            if (videoAspect > thumbAspect)
+            {
+                // Video is wider — pillarboxed (black bars top/bottom in thumb)
+                double scale = thumbAspect / videoAspect;
+                effectiveHeight = 100 * scale;
+                effectiveTop = (100 - effectiveHeight) / 2;
+            }
+            else
+            {
+                // Video is taller — letterboxed (black bars left/right in thumb)
+                double scale = videoAspect / thumbAspect;
+                effectiveWidth = 100 * scale;
+                effectiveLeft = (100 - effectiveWidth) / 2;
+            }
+        }
+
+        // Map selection percentages to video-relative percentages
+        double videoSelLeft = Math.Clamp((SelLeft - effectiveLeft) / effectiveWidth * 100, 0, 100);
+        double videoSelTop = Math.Clamp((SelTop - effectiveTop) / effectiveHeight * 100, 0, 100);
+        double videoSelRight = Math.Clamp(((SelLeft + SelWidth) - effectiveLeft) / effectiveWidth * 100, 0, 100);
+        double videoSelBottom = Math.Clamp(((SelTop + SelHeight) - effectiveTop) / effectiveHeight * 100, 0, 100);
+
+        // Convert to pixel crop values (pixels removed from each edge)
+        _cropLeft = (int)Math.Round(videoSelLeft / 100 * VideoWidth);
+        _cropTop = (int)Math.Round(videoSelTop / 100 * VideoHeight);
+        _cropRight = VideoWidth - (int)Math.Round(videoSelRight / 100 * VideoWidth);
+        _cropBottom = VideoHeight - (int)Math.Round(videoSelBottom / 100 * VideoHeight);
+
+        // Ensure minimum 2px remaining
+        _cropLeft = Math.Max(0, _cropLeft);
+        _cropTop = Math.Max(0, _cropTop);
+        _cropRight = Math.Max(0, _cropRight);
+        _cropBottom = Math.Max(0, _cropBottom);
+    }
+
+    private (double x, double y) GetPercentPosition(MouseEventArgs e)
+    {
+        // offsetX/offsetY are relative to the target element
+        // We need to convert to percentage of the element's size
+        // Since we can't easily get element size in Blazor without JS,
+        // we use offsetX/offsetY relative to a known container width.
+        // For now, use a fixed approach: the image fills the container.
+        // The container is max 560px wide (dialog content area).
+        // We'll use the offset relative to the bounding rect via JS interop.
+        // Simplified: use offset as percentage assuming 560x315 (16:9) display.
+        double containerWidth = 560;
+        double containerHeight = 315;
+        double px = Math.Clamp(e.OffsetX / containerWidth * 100, 0, 100);
+        double py = Math.Clamp(e.OffsetY / containerHeight * 100, 0, 100);
+        return (px, py);
+    }
+
+    private void Apply()
+    {
+        var result = new int[] { _cropTop, _cropBottom, _cropLeft, _cropRight };
+        MudDialog?.Close(DialogResult.Ok(result));
+    }
+
+    private void Cancel() => MudDialog?.Cancel();
+}

@@ -44,8 +44,10 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
-        var codec = GetBestVideoCodecForExtension(Path.GetExtension(outputPath));
-        var args = $"-y -i \"{inputPath}\" -filter:v \"crop={width}:{height}:{x}:{y}\" -c:v {codec} -c:a copy \"{outputPath}\"";
+        var targetFormat = Models.CodecMap.GetBestContainerForCodec(null); // Determine from extension
+        var ext = Path.GetExtension(outputPath).TrimStart('.');
+        var vCodec = Models.CodecMap.GetBestVideoCodec(ExtensionToVideoFormat(ext));
+        var args = $"-y -i \"{inputPath}\" -filter:v \"crop={width}:{height}:{x}:{y}\" -c:v {vCodec.Encoder} -c:a copy \"{outputPath}\"";
         return await RunFfmpegAsync(args, null, progress, ct, outputPath);
     }
 
@@ -57,7 +59,7 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
-        var codecArgs = BuildCodecArgs(videoFormat, audioFormat);
+        var codecArgs = BuildCodecArgsFromMap(videoFormat, audioFormat);
         var args = $"-y -i \"{inputPath}\" {codecArgs} \"{outputPath}\"";
         return await RunFfmpegAsync(args, null, progress, ct, outputPath);
     }
@@ -107,6 +109,91 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         }
     }
 
+    public async Task<Result<string>> ConvertFromUrlsAsync(
+        string videoUrl,
+        string? audioUrl,
+        TimeSpan? start,
+        TimeSpan? duration,
+        int[]? cropMargins,
+        VideoFormat videoFormat,
+        AudioFormat audioFormat,
+        string outputPath,
+        IProgress<double>? progress = null,
+        CancellationToken ct = default)
+    {
+        var inputArgs = new List<string>();
+        var filterArgs = new List<string>();
+        var codecArgs = new List<string>();
+
+        // Seek before input for fast seeking
+        if (start.HasValue)
+            inputArgs.Add($"-ss {FormatTime(start.Value)}");
+
+        // Video input
+        inputArgs.Add($"-i \"{videoUrl}\"");
+
+        // Audio input (separate stream)
+        if (!string.IsNullOrEmpty(audioUrl))
+        {
+            if (start.HasValue)
+                inputArgs.Add($"-ss {FormatTime(start.Value)}");
+            inputArgs.Add($"-i \"{audioUrl}\"");
+        }
+
+        // Duration limit
+        if (duration.HasValue)
+            inputArgs.Add($"-t {FormatTime(duration.Value)}");
+
+        // Crop filter
+        if (cropMargins is { Length: 4 })
+        {
+            // Margins are [top, bottom, left, right] — need to probe for dimensions
+            // For stream processing, we pass the crop filter and let FFmpeg handle it
+            // The caller should have validated via CropHelper already
+            var x = cropMargins[2]; // left
+            var y = cropMargins[0]; // top
+            // We can't know exact width/height without probing the URL, so use iw/ih expressions
+            filterArgs.Add($"crop=iw-{cropMargins[2]}-{cropMargins[3]}:ih-{cropMargins[0]}-{cropMargins[1]}:{x}:{y}");
+        }
+
+        // Video codec
+        if (videoFormat == VideoFormat.Gif)
+        {
+            // GIF conversion filter
+            filterArgs.Clear();
+            filterArgs.Add("fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
+            codecArgs.Add("-loop 0");
+        }
+        else if (videoFormat != VideoFormat.Unspecified)
+        {
+            var vCodec = Models.CodecMap.GetBestVideoCodec(videoFormat);
+            codecArgs.Add($"-c:v {vCodec.Encoder}");
+            var aCodec = Models.CodecMap.GetBestAudioCodec(videoFormat);
+            if (aCodec is not null)
+                codecArgs.Add($"-c:a {aCodec.Encoder}");
+        }
+        else
+        {
+            codecArgs.Add("-c:v libx264");
+            codecArgs.Add("-c:a aac");
+        }
+
+        // Audio format override
+        if (audioFormat != AudioFormat.Unspecified && videoFormat != VideoFormat.Gif)
+        {
+            var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
+            // Remove any existing -c:a
+            codecArgs.RemoveAll(a => a.StartsWith("-c:a"));
+            codecArgs.Add($"-c:a {aCodec.Encoder}");
+        }
+
+        // Build final args
+        var vf = filterArgs.Count > 0 ? $"-vf \"{string.Join(",", filterArgs)}\"" : "";
+        var allArgs = $"-y {string.Join(" ", inputArgs)} {vf} {string.Join(" ", codecArgs)} \"{outputPath}\"";
+
+        return await RunFfmpegAsync(allArgs, duration, progress, ct, outputPath);
+    }
+
     #region Helpers
 
     private async Task<Result<string>> RunFfmpegAsync(
@@ -149,56 +236,41 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
 
     private static string FormatTime(TimeSpan ts) => ts.ToString(@"hh\:mm\:ss\.fff");
 
-    private static string BuildCodecArgs(VideoFormat videoFormat, AudioFormat audioFormat)
+    private static string BuildCodecArgsFromMap(VideoFormat videoFormat, AudioFormat audioFormat)
     {
         var parts = new List<string>();
 
         if (videoFormat != VideoFormat.Unspecified && videoFormat != VideoFormat.Gif)
         {
-            var vCodec = videoFormat switch
-            {
-                VideoFormat.Mp4 => "libx264",
-                VideoFormat.Mkv => "libx264",
-                VideoFormat.Webm => "libvpx-vp9",
-                VideoFormat.Flv => "libx264",
-                VideoFormat.Ogg => "libtheora",
-                _ => "copy"
-            };
-            parts.Add($"-c:v {vCodec}");
+            var vCodec = Models.CodecMap.GetBestVideoCodec(videoFormat);
+            parts.Add($"-c:v {vCodec.Encoder}");
         }
 
         if (audioFormat != AudioFormat.Unspecified)
         {
-            var aCodec = audioFormat switch
-            {
-                AudioFormat.Mp3 => "libmp3lame",
-                AudioFormat.Aac => "aac",
-                AudioFormat.Flac => "flac",
-                AudioFormat.Opus => "libopus",
-                AudioFormat.Vorbis => "libvorbis",
-                AudioFormat.Wav => "pcm_s16le",
-                AudioFormat.M4a => "aac",
-                AudioFormat.Ogg => "libvorbis",
-                _ => "copy"
-            };
-            parts.Add($"-c:a {aCodec}");
+            var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
+            parts.Add($"-c:a {aCodec.Encoder}");
         }
         else if (videoFormat != VideoFormat.Unspecified)
         {
-            parts.Add("-c:a copy");
+            var aCodec = Models.CodecMap.GetBestAudioCodec(videoFormat);
+            if (aCodec is not null)
+                parts.Add($"-c:a {aCodec.Encoder}");
+            else
+                parts.Add("-c:a copy");
         }
 
         return string.Join(" ", parts);
     }
 
-    private static string GetBestVideoCodecForExtension(string extension) => extension.ToLowerInvariant() switch
+    private static VideoFormat ExtensionToVideoFormat(string ext) => ext.ToLowerInvariant() switch
     {
-        ".mp4" => "libx264",
-        ".mkv" => "libx264",
-        ".webm" => "libvpx-vp9",
-        ".flv" => "libx264",
-        ".ogg" => "libtheora",
-        _ => "libx264"
+        "mp4" => VideoFormat.Mp4,
+        "mkv" => VideoFormat.Mkv,
+        "webm" => VideoFormat.Webm,
+        "flv" => VideoFormat.Flv,
+        "ogg" => VideoFormat.Ogg,
+        _ => VideoFormat.Mp4
     };
 
     [GeneratedRegex(@"time=(?<time>[\d:.]+)")]

@@ -1,88 +1,295 @@
 @using YTR.Core.Services
+@inject ISettingsService Settings
+@inject IDialogService DialogService
 
 <MudPaper Class="pa-4" Elevation="1">
     <MudText Typo="Typo.subtitle1" Class="mb-3">Download Options</MudText>
 
     <MudStack Spacing="3">
-        <MudExpansionPanels>
-            <MudExpansionPanel Text="Segment" Expanded="false">
-                <MudStack Spacing="2">
-                    <MudTimePicker @bind-Time="_segmentStart" Label="Start Time" />
-                    <MudTimePicker @bind-Time="_segmentDuration" Label="Duration" />
-                </MudStack>
-            </MudExpansionPanel>
+        @* Selected format details display *@
+        @if (SelectedPair is not null && SelectedPair.IsValid)
+        {
+            <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
+                <MudText Typo="Typo.caption" Color="Color.Tertiary" Class="mb-1">Selected Format</MudText>
+                <MudText Typo="Typo.body2" Style="font-family: monospace;">
+                    @FormatSelectionText
+                </MudText>
+            </MudPaper>
+        }
 
-            <MudExpansionPanel Text="Crop" Expanded="false">
-                <MudGrid>
-                    <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" /></MudItem>
-                    <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" /></MudItem>
-                    <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" /></MudItem>
-                    <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" /></MudItem>
-                </MudGrid>
-            </MudExpansionPanel>
+        @if (!IsPlaylist)
+        {
+            <MudExpansionPanels MultiExpansion="true">
+                @* Segment panel *@
+                <MudExpansionPanel @bind-Expanded="_segmentExpanded">
+                    <TitleContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudText>Segment</MudText>
+                            @if (!_segmentExpanded && SegmentHasValues)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                            }
+                        </MudStack>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudStack Spacing="2">
+                            <MudTimePicker @bind-Time="_segmentStart" Label="Start Time" />
+                            <MudSelect T="SegmentMode" @bind-Value="_segmentEndMode" Label="End Mode"
+                                       Variant="Variant.Outlined" Dense="true">
+                                <MudSelectItem Value="SegmentMode.EndTime">End Time</MudSelectItem>
+                                <MudSelectItem Value="SegmentMode.Duration">Duration</MudSelectItem>
+                            </MudSelect>
+                            <MudTimePicker @bind-Time="_segmentEnd"
+                                           Label="@(_segmentEndMode == SegmentMode.Duration ? "Duration" : "End Time")" />
+                        </MudStack>
+                    </ChildContent>
+                </MudExpansionPanel>
 
-            <MudExpansionPanel Text="Convert" Expanded="false">
-                <MudStack Spacing="2">
-                    <MudSelect @bind-Value="_convertVideo" Label="Video Format" Variant="Variant.Outlined">
-                        <MudSelectItem Value="VideoFormat.Unspecified">None</MudSelectItem>
-                        <MudSelectItem Value="VideoFormat.Mp4">MP4</MudSelectItem>
-                        <MudSelectItem Value="VideoFormat.Mkv">MKV</MudSelectItem>
-                        <MudSelectItem Value="VideoFormat.Webm">WebM</MudSelectItem>
-                        <MudSelectItem Value="VideoFormat.Gif">GIF</MudSelectItem>
-                    </MudSelect>
-                    <MudSelect @bind-Value="_convertAudio" Label="Audio Format" Variant="Variant.Outlined">
-                        <MudSelectItem Value="AudioFormat.Unspecified">None</MudSelectItem>
-                        <MudSelectItem Value="AudioFormat.Mp3">MP3</MudSelectItem>
-                        <MudSelectItem Value="AudioFormat.Aac">AAC</MudSelectItem>
-                        <MudSelectItem Value="AudioFormat.Flac">FLAC</MudSelectItem>
-                        <MudSelectItem Value="AudioFormat.Opus">Opus</MudSelectItem>
-                    </MudSelect>
-                </MudStack>
-            </MudExpansionPanel>
-        </MudExpansionPanels>
+                @* Crop panel *@
+                <MudExpansionPanel @bind-Expanded="_cropExpanded">
+                    <TitleContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudText>Crop</MudText>
+                            @if (!_cropExpanded && CropHasValues)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                            }
+                        </MudStack>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudStack Spacing="2">
+                            @if (SelectedPair?.VideoFormat is not null && !string.IsNullOrEmpty(_thumbnailUrl))
+                            {
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.Crop" OnClick="OpenCropTool">
+                                    Visual Crop Tool
+                                </MudButton>
+                            }
+                            <MudGrid>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" /></MudItem>
+                            </MudGrid>
+                        </MudStack>
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                @* Convert panel *@
+                <MudExpansionPanel @bind-Expanded="_convertExpanded">
+                    <TitleContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudText>Convert</MudText>
+                            @if (!_convertExpanded && ConvertHasValues)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                            }
+                        </MudStack>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudStack Spacing="2">
+                            @if (_alwaysConvert)
+                            {
+                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">
+                                    Locked to preferred formats (Settings → Always Convert)
+                                </MudAlert>
+                            }
+                            <MudSelect @bind-Value="_convertVideo" Label="Video Format" Variant="Variant.Outlined"
+                                       Disabled="_alwaysConvert">
+                                <MudSelectItem Value="VideoFormat.Unspecified">None</MudSelectItem>
+                                <MudSelectItem Value="VideoFormat.Mp4">MP4</MudSelectItem>
+                                <MudSelectItem Value="VideoFormat.Mkv">MKV</MudSelectItem>
+                                <MudSelectItem Value="VideoFormat.Webm">WebM</MudSelectItem>
+                                <MudSelectItem Value="VideoFormat.Gif">GIF</MudSelectItem>
+                            </MudSelect>
+                            <MudSelect @bind-Value="_convertAudio" Label="Audio Format" Variant="Variant.Outlined"
+                                       Disabled="_alwaysConvert">
+                                <MudSelectItem Value="AudioFormat.Unspecified">None</MudSelectItem>
+                                <MudSelectItem Value="AudioFormat.Mp3">MP3</MudSelectItem>
+                                <MudSelectItem Value="AudioFormat.Aac">AAC</MudSelectItem>
+                                <MudSelectItem Value="AudioFormat.Flac">FLAC</MudSelectItem>
+                                <MudSelectItem Value="AudioFormat.Opus">Opus</MudSelectItem>
+                            </MudSelect>
+                        </MudStack>
+                    </ChildContent>
+                </MudExpansionPanel>
+
+                @* Limits panel *@
+                <MudExpansionPanel @bind-Expanded="_limitsExpanded">
+                    <TitleContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudText>Limits</MudText>
+                            @if (!_limitsExpanded && LimitsHasValues)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                            }
+                        </MudStack>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudStack Spacing="2">
+                            <MudSelect @bind-Value="_maxResolution" Label="Max Resolution" Variant="Variant.Outlined">
+                                @foreach (var res in Enum.GetValues<Resolution>())
+                                {
+                                    <MudSelectItem Value="res">@res</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudNumericField @bind-Value="_maxFileSize" Label="Max File Size (MB, 0 = unlimited)"
+                                             Variant="Variant.Outlined" Min="0" />
+                        </MudStack>
+                    </ChildContent>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
 
         <MudDivider Class="my-2" />
 
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.VideoFile"
-                   Disabled="Disabled" OnClick="OnClickDownloadVideo">
-            Download Video
-        </MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.AudioFile"
-                   Disabled="Disabled" OnClick="OnClickDownloadAudio">
-            Download Audio
-        </MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.Star"
-                   Disabled="Disabled" OnClick="OnClickDownloadBest">
-            Download Best
-        </MudButton>
+        @if (ShowDownloadSelected)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Download"
+                       Disabled="Disabled" OnClick="OnClickDownloadVideo">
+                Download Selected Format
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Star"
+                       Disabled="Disabled" OnClick="OnClickDownloadBest">
+                @(IsPlaylist ? "Download All [video+audio]" : "Download Best")
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.AudioFile"
+                       Disabled="Disabled" OnClick="OnClickDownloadAudio">
+                @(IsPlaylist ? "Download All Audio" : "Download Audio")
+            </MudButton>
+        }
     </MudStack>
 </MudPaper>
 
 @code {
+    // Segment
     private TimeSpan? _segmentStart;
-    private TimeSpan? _segmentDuration;
+    private TimeSpan? _segmentEnd;
+    private SegmentMode _segmentEndMode;
+    private bool _segmentExpanded;
+
+    // Crop
     private int _cropTop, _cropBottom, _cropLeft, _cropRight;
+    private bool _cropExpanded;
+
+    // Convert
     private VideoFormat _convertVideo = VideoFormat.Unspecified;
     private AudioFormat _convertAudio = AudioFormat.Unspecified;
+    private bool _convertExpanded;
+    private bool _alwaysConvert;
+
+    // Limits
+    private Resolution _maxResolution = Resolution.Any;
+    private int _maxFileSize;
+    private bool _limitsExpanded;
 
     [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ShowDownloadSelected { get; set; }
+    [Parameter] public bool IsPlaylist { get; set; }
+    [Parameter] public FormatPair? SelectedPair { get; set; }
+    [Parameter] public string? ThumbnailUrl { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadVideo { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadAudio { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadBest { get; set; }
 
+    private string? _thumbnailUrl => ThumbnailUrl;
+
+    // Active indicators
+    private bool SegmentHasValues => _segmentStart.HasValue || _segmentEnd.HasValue;
+    private bool CropHasValues => _cropTop > 0 || _cropBottom > 0 || _cropLeft > 0 || _cropRight > 0;
+    private bool ConvertHasValues => _convertVideo != VideoFormat.Unspecified || _convertAudio != AudioFormat.Unspecified;
+    private bool LimitsHasValues => _maxResolution != Resolution.Any || _maxFileSize > 0;
+
+    protected override void OnInitialized()
+    {
+        // Load segment mode from settings
+        _segmentEndMode = Settings.Appearance.SegmentMode;
+
+        // Apply "always convert to preferred" setting
+        _alwaysConvert = Settings.Processing.AlwaysConvertToPreferred;
+        if (_alwaysConvert)
+        {
+            _convertVideo = Settings.Processing.PreferredVideoFormat;
+            _convertAudio = Settings.Processing.PreferredAudioFormat;
+            _convertExpanded = true;
+        }
+
+        // Apply enforced restrictions
+        if (Settings.Restrictions.EnforceRestrictions)
+        {
+            _maxResolution = Settings.Restrictions.MaxResolution;
+            _maxFileSize = Settings.Restrictions.MaxFileSizeMb;
+            if (LimitsHasValues) _limitsExpanded = true;
+        }
+    }
+
+    private string FormatSelectionText
+    {
+        get
+        {
+            if (SelectedPair is null) return string.Empty;
+
+            var video = SelectedPair.VideoFormat;
+            var audio = SelectedPair.AudioFormat;
+
+            if (video is not null && video.StreamKind == StreamKind.AudioAndVideo)
+                return video.Format ?? FormatDescriptionFallback(video);
+
+            if (video is not null && audio is not null)
+            {
+                var videoText = video.Format ?? FormatDescriptionFallback(video);
+                var audioText = audio.Format ?? FormatDescriptionFallback(audio);
+                return $"{videoText} + {audioText}";
+            }
+
+            if (video is not null)
+                return video.Format ?? FormatDescriptionFallback(video);
+
+            if (audio is not null)
+                return audio.Format ?? FormatDescriptionFallback(audio);
+
+            return string.Empty;
+        }
+    }
+
+    private static string FormatDescriptionFallback(FormatInfo format)
+    {
+        var id = format.FormatId;
+        if (format.Width.HasValue && format.Height.HasValue)
+            return $"{id} - {format.Width}x{format.Height} ({format.Height}p)";
+        if (format.StreamKind == StreamKind.Audio)
+        {
+            var note = format.FormatNote ?? format.AudioCodec ?? "audio";
+            return $"{id} - audio only ({note})";
+        }
+        return id;
+    }
+
     private DownloadRequest BuildRequest()
     {
         int[]? crops = null;
-        if (_cropTop > 0 || _cropBottom > 0 || _cropLeft > 0 || _cropRight > 0)
-            crops = [_cropLeft, _cropTop, _cropRight - _cropLeft, _cropBottom - _cropTop];
+        if (CropHasValues)
+            crops = [_cropTop, _cropBottom, _cropLeft, _cropRight];
+
+        // Calculate segment duration based on mode
+        TimeSpan? segDuration = null;
+        if (_segmentStart.HasValue && _segmentEnd.HasValue)
+        {
+            segDuration = _segmentEndMode == SegmentMode.Duration
+                ? _segmentEnd
+                : _segmentEnd - _segmentStart;
+        }
 
         return new DownloadRequest
         {
             SegmentStart = _segmentStart,
-            SegmentDuration = _segmentDuration,
+            SegmentDuration = segDuration,
             CropValues = crops,
             ConvertVideo = _convertVideo != VideoFormat.Unspecified ? _convertVideo : null,
             ConvertAudio = _convertAudio != AudioFormat.Unspecified ? _convertAudio : null
@@ -92,4 +299,30 @@
     private async Task OnClickDownloadVideo() => await OnDownloadVideo.InvokeAsync(BuildRequest());
     private async Task OnClickDownloadAudio() => await OnDownloadAudio.InvokeAsync(BuildRequest());
     private async Task OnClickDownloadBest() => await OnDownloadBest.InvokeAsync(BuildRequest());
+
+    private async Task OpenCropTool()
+    {
+        var videoFormat = SelectedPair?.VideoFormat;
+        if (videoFormat is null || string.IsNullOrEmpty(_thumbnailUrl)) return;
+
+        var parameters = new DialogParameters<CropTool>
+        {
+            { x => x.ThumbnailUrl, _thumbnailUrl },
+            { x => x.VideoWidth, videoFormat.Width ?? 1920 },
+            { x => x.VideoHeight, videoFormat.Height ?? 1080 }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CropTool>("Crop Video", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is int[] crops && crops.Length == 4)
+        {
+            _cropTop = crops[0];
+            _cropBottom = crops[1];
+            _cropLeft = crops[2];
+            _cropRight = crops[3];
+            _cropExpanded = true;
+        }
+    }
 }

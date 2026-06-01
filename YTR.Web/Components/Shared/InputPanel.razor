@@ -11,7 +11,8 @@
         </MudItem>
         <MudItem xs="12" sm="3" md="2" Class="d-flex align-center">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                       OnClick="ListFormats" Disabled="_loading">
+                       OnClick="ListFormats" Disabled="_loading"
+                       Style="white-space:nowrap;">
                 @if (_loading)
                 {
                     <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />

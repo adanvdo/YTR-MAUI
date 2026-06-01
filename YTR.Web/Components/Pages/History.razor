@@ -1,29 +1,87 @@
 @page "/history"
 @inject IHistoryService HistoryService
+@inject IPlatformService Platform
+@inject NavigationManager Nav
 
 <PageTitle>YTR - History</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Download History</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
+    <MudText Typo="Typo.h5">Download History</MudText>
+    <MudSpacer />
+    @* Delete buttons (item 17) *@
+    <MudMenu Label="Delete" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+             StartIcon="@Icons.Material.Filled.Delete">
+        <MudMenuItem OnClick="() => ClearLogs(null)">Clear All Logs</MudMenuItem>
+        <MudMenuItem OnClick="() => ClearLogs(StreamKind.Video)">Clear Video Logs</MudMenuItem>
+        <MudMenuItem OnClick="() => ClearLogs(StreamKind.Audio)">Clear Audio Logs</MudMenuItem>
+        <MudDivider />
+        <MudMenuItem OnClick="() => DeleteWithFiles(null)">Delete All Files + Logs</MudMenuItem>
+        <MudMenuItem OnClick="() => DeleteWithFiles(StreamKind.Video)">Delete Video Files + Logs</MudMenuItem>
+        <MudMenuItem OnClick="() => DeleteWithFiles(StreamKind.Audio)">Delete Audio Files + Logs</MudMenuItem>
+    </MudMenu>
+</MudStack>
 
-<MudDataGrid T="DownloadRecord" Items="_records" Dense="true" Hover="true" Striped="true"
-             Loading="_loading" SortMode="SortMode.Single" Filterable="true">
+<MudDataGrid T="DownloadRecord" Items="_records" Dense="true" Hover="true"
+             Loading="_loading" SortMode="SortMode.Single" Filterable="true"
+             RowClick="OnRowClick">
     <Columns>
-        <PropertyColumn Property="x => x.Title" Title="Title" />
+        <TemplateColumn Title="" Width="30px" Sortable="false">
+            <CellTemplate>
+                <MudIcon Icon="@(FileExists(context.Item) ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                         Color="@(FileExists(context.Item) ? Color.Success : Color.Warning)" Size="Size.Small" />
+            </CellTemplate>
+        </TemplateColumn>
         <PropertyColumn Property="x => x.Platform" Title="Platform" />
+        <PropertyColumn Property="x => x.Title" Title="Title" />
         <PropertyColumn Property="x => x.StreamKind" Title="Type" />
         <PropertyColumn Property="x => x.DownloadedAt" Title="Downloaded" Format="g" />
         <TemplateColumn Title="Actions" Sortable="false">
             <CellTemplate>
-                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small"
-                               OnClick="@(() => OpenLocation(context.Item))" />
+                <MudStack Row="true" Spacing="1">
+                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small"
+                                   OnClick="@(() => OpenLocation(context.Item))"
+                                   Disabled="@(!FileExists(context.Item))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Replay" Size="Size.Small"
+                                   OnClick="@(() => ReDownload(context.Item))"
+                                   Title="Re-download with same settings" />
+                </MudStack>
             </CellTemplate>
         </TemplateColumn>
     </Columns>
 </MudDataGrid>
 
+@* Detail tooltip on row click *@
+@if (_selectedRecord is not null)
+{
+    <MudPaper Class="pa-3 mt-2" Elevation="2">
+        <MudText Typo="Typo.subtitle2">@_selectedRecord.Title</MudText>
+        <MudText Typo="Typo.caption">URL: @_selectedRecord.Url</MudText>
+        <MudText Typo="Typo.caption">Format: @_selectedRecord.Format</MudText>
+        <MudText Typo="Typo.caption">Path: @_selectedRecord.FilePath</MudText>
+        @if (_selectedRecord.SegmentStart.HasValue)
+        {
+            <MudText Typo="Typo.caption">Segment: @_selectedRecord.SegmentStart → +@_selectedRecord.SegmentDuration</MudText>
+        }
+        @if (_selectedRecord.CropValues is not null)
+        {
+            <MudText Typo="Typo.caption">Crop: @_selectedRecord.CropValues</MudText>
+        }
+        @if (_selectedRecord.VideoConversion.HasValue)
+        {
+            <MudText Typo="Typo.caption">Convert Video: @_selectedRecord.VideoConversion</MudText>
+        }
+        @if (_selectedRecord.AudioConversion.HasValue)
+        {
+            <MudText Typo="Typo.caption">Convert Audio: @_selectedRecord.AudioConversion</MudText>
+        }
+    </MudPaper>
+}
+
 @code {
     private IReadOnlyList<DownloadRecord> _records = [];
     private bool _loading = true;
+    private DownloadRecord? _selectedRecord;
 
     protected override async Task OnInitializedAsync()
     {
@@ -31,9 +89,41 @@
         _loading = false;
     }
 
-    private Task OpenLocation(DownloadRecord record)
+    private void OnRowClick(DataGridRowClickEventArgs<DownloadRecord> args)
     {
-        // Will be wired to IPlatformService.OpenFolderAsync
-        return Task.CompletedTask;
+        _selectedRecord = _selectedRecord == args.Item ? null : args.Item;
     }
+
+    private async Task OpenLocation(DownloadRecord record)
+    {
+        await Platform.OpenFolderAsync(record.FilePath);
+    }
+
+    /// <summary>
+    /// Re-download: navigates to home with the URL pre-filled.
+    /// The Home page would need to accept query params to restore settings — 
+    /// for now we use NavigationManager with a query string.
+    /// </summary>
+    private void ReDownload(DownloadRecord record)
+    {
+        // Navigate to home with the URL as a query parameter
+        Nav.NavigateTo($"/?redownload={Uri.EscapeDataString(record.Id.ToString())}");
+    }
+
+    private async Task ClearLogs(StreamKind? filter)
+    {
+        await HistoryService.ClearAsync(filter);
+        _records = await HistoryService.GetAllAsync();
+        StateHasChanged();
+    }
+
+    private async Task DeleteWithFiles(StreamKind? filter)
+    {
+        await HistoryService.ClearWithFilesAsync(filter);
+        _records = await HistoryService.GetAllAsync();
+        StateHasChanged();
+    }
+
+    private static bool FileExists(DownloadRecord record) =>
+        !string.IsNullOrEmpty(record.FilePath) && File.Exists(record.FilePath);
 }

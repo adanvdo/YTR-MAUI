@@ -79,4 +79,41 @@ public sealed class HistoryService : IHistoryService
                 .ExecuteDeleteAsync(ct);
         }
     }
+
+    public async Task ClearWithFilesAsync(StreamKind? filter = null, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var query = filter is null
+            ? db.Downloads.AsQueryable()
+            : db.Downloads.Where(d => d.StreamKind == filter);
+
+        var records = await query.ToListAsync(ct);
+
+        foreach (var record in records)
+        {
+            try
+            {
+                if (record.InSubFolder && !string.IsNullOrEmpty(record.FilePath))
+                {
+                    var dir = Path.GetDirectoryName(record.FilePath);
+                    if (dir is not null && Directory.Exists(dir))
+                        Directory.Delete(dir, true);
+                }
+                else if (!string.IsNullOrEmpty(record.FilePath) && File.Exists(record.FilePath))
+                {
+                    File.Delete(record.FilePath);
+                }
+            }
+            catch
+            {
+                // Best effort file deletion — don't fail the whole operation
+            }
+        }
+
+        if (filter is null)
+            await db.Downloads.ExecuteDeleteAsync(ct);
+        else
+            await db.Downloads.Where(d => d.StreamKind == filter).ExecuteDeleteAsync(ct);
+    }
 }

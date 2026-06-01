@@ -60,4 +60,20 @@ public interface IMediaProcessor
         string outputPath,
         IProgress<double>? progress = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Processes media directly from stream URLs without downloading first.
+    /// Combines segment extraction, crop, and format conversion in a single FFmpeg pass.
+    /// </summary>
+    Task<Result<string>> ConvertFromUrlsAsync(
+        string videoUrl,
+        string? audioUrl,
+        TimeSpan? start,
+        TimeSpan? duration,
+        int[]? cropMargins,
+        VideoFormat videoFormat,
+        AudioFormat audioFormat,
+        string outputPath,
+        IProgress<double>? progress = null,
+        CancellationToken ct = default);
 }

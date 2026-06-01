@@ -1,17 +1,46 @@
 @page "/settings"
 @inject ISettingsService SettingsService
+@inject IFolderPickerService FolderPicker
+@inject NavigationManager Nav
 
 <PageTitle>YTR - Settings</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Settings</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
+    <MudText Typo="Typo.h5">Settings</MudText>
+</MudStack>
+
+@if (_validationError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="() => _validationError = null">
+        @_validationError
+    </MudAlert>
+}
+
+@if (_saved)
+{
+    <MudAlert Severity="Severity.Success" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="() => _saved = false">
+        Settings saved.
+    </MudAlert>
+}
 
 <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
     <MudTabPanel Text="Downloads">
         <MudStack Spacing="3">
-            <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
-                          Label="Video Download Path" Variant="Variant.Outlined" />
-            <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
-                          Label="Audio Download Path" Variant="Variant.Outlined" />
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
+                              Label="Video Download Path" Variant="Variant.Outlined" Style="flex:1;" />
+                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                               OnClick="() => PickFolder(true)" />
+            </MudStack>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
+                              Label="Audio Download Path" Variant="Variant.Outlined" Style="flex:1;" />
+                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                               OnClick="() => PickFolder(false)" />
+            </MudStack>
             <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
                        Label="Use video title as filename" Color="Color.Primary" />
             <MudSwitch @bind-Value="SettingsService.Download.CreateFolderForPlaylists"
@@ -33,7 +62,7 @@
                 }
             </MudSelect>
             <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
-                             Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" />
+                             Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" Min="0" />
         </MudStack>
     </MudTabPanel>
 
@@ -43,7 +72,7 @@
                        Label="Always convert to preferred format" Color="Color.Primary" />
             <MudSelect @bind-Value="SettingsService.Processing.PreferredVideoFormat"
                        Label="Preferred Video Format" Variant="Variant.Outlined">
-                @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif))
+                @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif && f != VideoFormat.Unspecified))
                 {
                     <MudSelectItem Value="fmt">@fmt</MudSelectItem>
                 }
@@ -55,16 +84,45 @@
                     <MudSelectItem Value="fmt">@fmt</MudSelectItem>
                 }
             </MudSelect>
+            <MudSwitch @bind-Value="SettingsService.Processing.FetchMissingMetadata"
+                       Label="Fetch missing metadata when listing formats" Color="Color.Primary" />
             <MudSwitch @bind-Value="SettingsService.Processing.VerboseOutput"
                        Label="Verbose output" Color="Color.Primary" />
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="History">
+        <MudStack Spacing="3">
+            <MudSwitch @bind-Value="SettingsService.History.Enabled"
+                       Label="Enable download history" Color="Color.Primary" />
+            <MudNumericField @bind-Value="SettingsService.History.RetentionDays"
+                             Label="History retention (days)" Variant="Variant.Outlined" Min="1" Max="365" />
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Advanced">
+        <MudStack Spacing="3">
+            <MudSelect @bind-Value="SettingsService.Updates.Channel"
+                       Label="Release Channel" Variant="Variant.Outlined">
+                @foreach (var ch in Enum.GetValues<ReleaseChannel>())
+                {
+                    <MudSelectItem Value="ch">@ch</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch @bind-Value="SettingsService.Appearance.DarkMode"
+                       Label="Dark mode" Color="Color.Primary" />
         </MudStack>
     </MudTabPanel>
 
     <MudTabPanel Text="About">
         <MudStack Spacing="2">
             <MudText Typo="Typo.body1"><b>YTR</b> — Media Downloader</MudText>
+            <MudText Typo="Typo.body2">Version: @GetCurrentVersion()</MudText>
             <MudText Typo="Typo.body2">Dependencies: yt-dlp + FFmpeg</MudText>
+            <MudText Typo="Typo.body2">yt-dlp: @(SettingsService.Updates.YtDlpLocalVersion ?? "unknown")</MudText>
+            <MudText Typo="Typo.body2">FFmpeg: @(SettingsService.Updates.FfmpegLocalVersion ?? "unknown")</MudText>
             <MudLink Href="https://github.com/adanvdo/YT-RED-UI" Target="_blank">GitHub Repository</MudLink>
+            <MudText Typo="Typo.caption">Contact: jesse@jamgalactic.com</MudText>
         </MudStack>
     </MudTabPanel>
 </MudTabs>
@@ -73,8 +131,36 @@
            OnClick="SaveSettings">Save</MudButton>
 
 @code {
+    private string? _validationError;
+    private bool _saved;
+
     private async Task SaveSettings()
     {
+        _saved = false;
+        _validationError = SettingsService.Validate();
+        if (_validationError is not null)
+            return;
+
         await SettingsService.SaveAsync();
+        _saved = true;
+    }
+
+    private async Task PickFolder(bool isVideo)
+    {
+        var path = await FolderPicker.PickFolderAsync();
+        if (path is not null)
+        {
+            if (isVideo)
+                SettingsService.Download.VideoDownloadPath = path;
+            else
+                SettingsService.Download.AudioDownloadPath = path;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetCurrentVersion()
+    {
+        var asm = System.Reflection.Assembly.GetEntryAssembly();
+        return asm?.GetName().Version?.ToString(3) ?? "0.0.0";
     }
 }

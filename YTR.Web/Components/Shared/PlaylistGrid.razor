@@ -1,0 +1,83 @@
+<MudPaper Class="@($"pa-4 {Class}")" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.subtitle1">Playlist Items (@(Items?.Count ?? 0))</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ToggleSelectAll">
+            @(_allSelected ? "Clear Selection" : "Select All")
+        </MudButton>
+    </MudStack>
+
+    @if (Items is null || Items.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Tertiary">No playlist items loaded.</MudText>
+    }
+    else
+    {
+        <MudList T="PlaylistItem" Dense="true" Style="max-height:400px;overflow-y:auto;">
+            @foreach (var item in Items)
+            {
+                <MudListItem @key="item.Id">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudCheckBox T="bool" Value="item.Selected" ValueChanged="@(v => OnItemToggled(item, v))"
+                                     Color="Color.Primary" Dense="true" />
+                        @if (!string.IsNullOrEmpty(item.ThumbnailUrl))
+                        {
+                            <MudImage Src="@item.ThumbnailUrl" Alt="" Width="80" Height="45"
+                                      ObjectFit="ObjectFit.Cover" Class="rounded" />
+                        }
+                        else
+                        {
+                            <MudPaper Width="80px" Height="45px" Class="d-flex align-center justify-center rounded"
+                                      Style="background:#2a2a3a;">
+                                <MudIcon Icon="@Icons.Material.Filled.Videocam" Size="Size.Small" />
+                            </MudPaper>
+                        }
+                        <MudStack Spacing="0" Style="flex:1;min-width:0;">
+                            <MudText Typo="Typo.body2" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                @(item.Title ?? "Untitled")
+                            </MudText>
+                            @if (item.Duration.HasValue)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Tertiary">
+                                    @item.Duration.Value.ToString(@"hh\:mm\:ss")
+                                </MudText>
+                            }
+                        </MudStack>
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public IReadOnlyList<PlaylistItem>? Items { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<PlaylistItem>> SelectionChanged { get; set; }
+
+    private bool _allSelected = true;
+
+    private void OnItemToggled(PlaylistItem item, bool selected)
+    {
+        item.Selected = selected;
+        _allSelected = Items?.All(i => i.Selected) ?? false;
+        NotifySelectionChanged();
+    }
+
+    private void ToggleSelectAll()
+    {
+        _allSelected = !_allSelected;
+        if (Items is not null)
+        {
+            foreach (var item in Items)
+                item.Selected = _allSelected;
+        }
+        NotifySelectionChanged();
+    }
+
+    private void NotifySelectionChanged()
+    {
+        var selected = Items?.Where(i => i.Selected).ToList() ?? [];
+        SelectionChanged.InvokeAsync(selected);
+    }
+}
