@@ -69,23 +69,29 @@ html, body {
     overflow: hidden;
 }
 
-.home-input {
-    flex-shrink: 0;
-}
-
 .home-content {
     display: flex;
     flex: 1;
     overflow: hidden;
     gap: 16px;
-    margin-top: 16px;
 }
 
 .home-main {
     flex: 2;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-right: 0px;
+}
+
+.home-fixed-top {
+    flex-shrink: 0;
+}
+
+.home-scrollable {
+    flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-right: 4px;
 }
 
 .home-sidebar {
@@ -98,5 +104,77 @@ html, body {
 .home-status {
     flex-shrink: 0;
     border-top: 1px solid rgba(255,255,255,0.08);
-    padding-top: 4px;
+    height: 20px;
+}
+
+.status-bar {
+    height: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+}
+
+.status-bar .status-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+.status-bar .status-text {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+    text-align: left;
+}
+
+.status-bar .status-cancel {
+    padding: 0 !important;
+    width: 16px !important;
+    height: 16px !important;
+}
+
+/* Control panel compact styles */
+.control-panel .mud-expansion-panels {
+    padding-top: 5px;
+}
+
+.control-panel .mud-expand-panel {
+    margin: 0 !important;
+}
+
+.control-panel .mud-panel-expanded {
+    border: 1px solid rgba(255, 255, 255, 0.11764705882352941);
+}
+
+.control-panel .mud-expand-panel-header {
+    padding: 4px 8px !important;
+    min-height: 32px !important;
+}
+
+.control-panel .mud-input-control {
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+}
+
+.control-panel .mud-input {
+    font-size: 0.8125rem !important;
+}
+
+.control-panel .mud-input-label {
+    font-size: 0.75rem !important;
+}
+
+/* Prevent scrollbars inside control panel expansion panels */
+.control-panel .mud-expand-panel-content {
+    padding: 0px 12px 10px 12px !important;
+}
+
+.control-panel .mud-collapse-container,
+.control-panel .mud-collapse-wrapper {
+    overflow: hidden !important;
 }

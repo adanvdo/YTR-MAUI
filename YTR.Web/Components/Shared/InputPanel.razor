@@ -1,6 +1,6 @@
 @inject IUrlAnalyzer UrlAnalyzer
 
-<MudPaper Class="pa-4" Elevation="1">
+<MudPaper Class="pa-2" Elevation="1">
     <MudGrid>
         <MudItem xs="12" sm="9" md="10">
             <MudTextField @bind-Value="_url" Label="Media URL or Video ID"
@@ -28,6 +28,12 @@
     private bool _loading;
 
     [Parameter] public EventCallback<UrlAnalysisResult> OnUrlAnalyzed { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _loading = IsLoading;
+    }
 
     private async Task ListFormats()
     {
@@ -41,7 +47,7 @@
         }
         finally
         {
-            _loading = false;
+            _loading = IsLoading;
         }
     }
 

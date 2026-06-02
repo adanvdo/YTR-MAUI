@@ -1,48 +1,58 @@
 @inject DownloadStateService State
 @implements IDisposable
 
-<MudPaper Class="pa-1 px-2" Elevation="0" Style="background: transparent; height: 30px; display: flex; align-items: center;">
+<div class="status-bar">
     @if (State.IsDownloading)
     {
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
-                               Rounded="true" Size="Size.Medium" Style="flex:1;">
-                <MudText Typo="Typo.caption">
-                    @State.StatusMessage
-                    @if (State.CurrentProgress.Speed is not null)
-                    {
-                        <text> — @State.CurrentProgress.Speed</text>
-                    }
-                    @if (State.CurrentProgress.Eta is not null)
-                    {
-                        <text> (ETA: @State.CurrentProgress.Eta)</text>
-                    }
-                </MudText>
-            </MudProgressLinear>
+        <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
+                           Rounded="true" Size="Size.Small" Class="status-progress"
+                           Indeterminate="@(State.CurrentProgress.Progress <= 0)" />
+        <div class="status-text">
+            <span>@State.StatusMessage</span>
+            @if (State.CurrentProgress.Speed is not null)
+            {
+                <span> — @State.CurrentProgress.Speed</span>
+            }
+            @if (State.CurrentProgress.Eta is not null)
+            {
+                <span> (ETA: @State.CurrentProgress.Eta)</span>
+            }
             @if (State.CanCancel)
             {
                 <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
-                               Size="Size.Small" OnClick="State.Cancel" />
+                               Size="Size.Small" OnClick="State.Cancel" Class="status-cancel" />
             }
-        </MudStack>
-        @if (State.IsPlaylistDownload)
-        {
-            <MudProgressLinear Value="@((double)State.PlaylistCompleted / State.PlaylistTotal * 100)"
-                               Color="Color.Secondary" Rounded="true" Size="Size.Small" Class="mt-1">
-                <MudText Typo="Typo.caption">@State.PlaylistCompleted / @State.PlaylistTotal</MudText>
-            </MudProgressLinear>
-        }
+        </div>
+    }
+    else if (_indeterminate)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary"
+                           Rounded="true" Size="Size.Small" Class="status-progress" />
+        <div class="status-text">
+            <span>@State.StatusMessage</span>
+        </div>
     }
     else
     {
-        <MudText Typo="Typo.caption" Color="Color.Tertiary">@State.StatusMessage</MudText>
+        <div class="status-text">
+            <span>@State.StatusMessage</span>
+        </div>
     }
-</MudPaper>
+</div>
 
 @code {
+    private bool _indeterminate;
+
+    [Parameter] public bool ShowIndeterminate { get; set; }
+
     protected override void OnInitialized()
     {
         State.OnStateChanged += OnStateChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        _indeterminate = ShowIndeterminate;
     }
 
     private void OnStateChanged()

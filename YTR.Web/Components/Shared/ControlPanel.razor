@@ -2,16 +2,15 @@
 @inject ISettingsService Settings
 @inject IDialogService DialogService
 
-<MudPaper Class="pa-4" Elevation="1">
-    <MudText Typo="Typo.subtitle1" Class="mb-3">Download Options</MudText>
+<MudPaper Class="pa-2 control-panel" Elevation="1">
+    <MudText Typo="Typo.caption" Class="mb-1 cp-title">Download Options</MudText>
 
-    <MudStack Spacing="3">
+    <MudStack Spacing="1">
         @* Selected format details display *@
         @if (SelectedPair is not null && SelectedPair.IsValid)
         {
-            <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
-                <MudText Typo="Typo.caption" Color="Color.Tertiary" Class="mb-1">Selected Format</MudText>
-                <MudText Typo="Typo.body2" Style="font-family: monospace;">
+            <MudPaper Class="pa-1 px-2 cp-format-display" Elevation="0">
+                <MudText Typo="Typo.caption" Class="cp-format-text">
                     @FormatSelectionText
                 </MudText>
             </MudPaper>
@@ -19,12 +18,12 @@
 
         @if (!IsPlaylist)
         {
-            <MudExpansionPanels MultiExpansion="true">
+            <MudExpansionPanels MultiExpansion="true" Dense="true">
                 @* Segment panel *@
-                <MudExpansionPanel @bind-Expanded="_segmentExpanded">
+                <MudExpansionPanel @bind-Expanded="_segmentExpanded" Dense="true">
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudText>Segment</MudText>
+                            <MudText Typo="Typo.body2">Segment</MudText>
                             @if (!_segmentExpanded && SegmentHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
@@ -32,24 +31,19 @@
                         </MudStack>
                     </TitleContent>
                     <ChildContent>
-                        <MudStack Spacing="2">
-                            <MudTimePicker @bind-Time="_segmentStart" Label="Start Time" />
-                            <MudSelect T="SegmentMode" @bind-Value="_segmentEndMode" Label="End Mode"
-                                       Variant="Variant.Outlined" Dense="true">
-                                <MudSelectItem Value="SegmentMode.EndTime">End Time</MudSelectItem>
-                                <MudSelectItem Value="SegmentMode.Duration">Duration</MudSelectItem>
-                            </MudSelect>
-                            <MudTimePicker @bind-Time="_segmentEnd"
+                        <MudStack Spacing="1" Class="cp-panel-segment">
+                            <MudTimePicker @bind-Time="_segmentStart" Label="Start" Dense="true" Margin="Margin.Dense" />
+                            <MudTimePicker @bind-Time="_segmentEnd" Dense="true" Margin="Margin.Dense"
                                            Label="@(_segmentEndMode == SegmentMode.Duration ? "Duration" : "End Time")" />
                         </MudStack>
                     </ChildContent>
                 </MudExpansionPanel>
 
                 @* Crop panel *@
-                <MudExpansionPanel @bind-Expanded="_cropExpanded">
+                <MudExpansionPanel @bind-Expanded="_cropExpanded" Dense="true">
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudText>Crop</MudText>
+                            <MudText Typo="Typo.body2">Crop</MudText>
                             @if (!_cropExpanded && CropHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
@@ -57,7 +51,7 @@
                         </MudStack>
                     </TitleContent>
                     <ChildContent>
-                        <MudStack Spacing="2">
+                        <MudStack Spacing="1" Class="cp-panel-crop">
                             @if (SelectedPair?.VideoFormat is not null && !string.IsNullOrEmpty(_thumbnailUrl))
                             {
                                 <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
@@ -65,21 +59,21 @@
                                     Visual Crop Tool
                                 </MudButton>
                             }
-                            <MudGrid>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" /></MudItem>
+                            <MudGrid Spacing="1">
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
                             </MudGrid>
                         </MudStack>
                     </ChildContent>
                 </MudExpansionPanel>
 
                 @* Convert panel *@
-                <MudExpansionPanel @bind-Expanded="_convertExpanded">
+                <MudExpansionPanel @bind-Expanded="_convertExpanded" Dense="true">
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudText>Convert</MudText>
+                            <MudText Typo="Typo.body2">Convert</MudText>
                             @if (!_convertExpanded && ConvertHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
@@ -87,23 +81,23 @@
                         </MudStack>
                     </TitleContent>
                     <ChildContent>
-                        <MudStack Spacing="2">
+                        <MudStack Spacing="1" Class="cp-panel-convert">
                             @if (_alwaysConvert)
                             {
-                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">
-                                    Locked to preferred formats (Settings → Always Convert)
-                                </MudAlert>
+                                <MudText Typo="Typo.caption" Color="Color.Warning">
+                                    Locked to preferred formats (Settings)
+                                </MudText>
                             }
-                            <MudSelect @bind-Value="_convertVideo" Label="Video Format" Variant="Variant.Outlined"
-                                       Disabled="_alwaysConvert">
+                            <MudSelect @bind-Value="_convertVideo" Label="Video" Variant="Variant.Outlined"
+                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense">
                                 <MudSelectItem Value="VideoFormat.Unspecified">None</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Mp4">MP4</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Mkv">MKV</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Webm">WebM</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Gif">GIF</MudSelectItem>
                             </MudSelect>
-                            <MudSelect @bind-Value="_convertAudio" Label="Audio Format" Variant="Variant.Outlined"
-                                       Disabled="_alwaysConvert">
+                            <MudSelect @bind-Value="_convertAudio" Label="Audio" Variant="Variant.Outlined"
+                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense">
                                 <MudSelectItem Value="AudioFormat.Unspecified">None</MudSelectItem>
                                 <MudSelectItem Value="AudioFormat.Mp3">MP3</MudSelectItem>
                                 <MudSelectItem Value="AudioFormat.Aac">AAC</MudSelectItem>
@@ -115,10 +109,10 @@
                 </MudExpansionPanel>
 
                 @* Limits panel *@
-                <MudExpansionPanel @bind-Expanded="_limitsExpanded">
+                <MudExpansionPanel @bind-Expanded="_limitsExpanded" Dense="true">
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudText>Limits</MudText>
+                            <MudText Typo="Typo.body2">Limits</MudText>
                             @if (!_limitsExpanded && LimitsHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
@@ -126,27 +120,28 @@
                         </MudStack>
                     </TitleContent>
                     <ChildContent>
-                        <MudStack Spacing="2">
-                            <MudSelect @bind-Value="_maxResolution" Label="Max Resolution" Variant="Variant.Outlined">
+                        <MudStack Spacing="1" Class="cp-panel-limits">
+                            <MudSelect @bind-Value="_maxResolution" Label="Max Resolution" Variant="Variant.Outlined"
+                                       Dense="true" Margin="Margin.Dense">
                                 @foreach (var res in Enum.GetValues<Resolution>())
                                 {
                                     <MudSelectItem Value="res">@res</MudSelectItem>
                                 }
                             </MudSelect>
-                            <MudNumericField @bind-Value="_maxFileSize" Label="Max File Size (MB, 0 = unlimited)"
-                                             Variant="Variant.Outlined" Min="0" />
+                            <MudNumericField @bind-Value="_maxFileSize" Label="Max Size (MB, 0 = no limit)"
+                                             Variant="Variant.Outlined" Min="0" Dense="true" Margin="Margin.Dense" />
                         </MudStack>
                     </ChildContent>
                 </MudExpansionPanel>
             </MudExpansionPanels>
         }
 
-        <MudDivider Class="my-2" />
+        <MudDivider Class="my-0" />
 
         @if (ShowDownloadSelected)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                       StartIcon="@Icons.Material.Filled.Download"
+                       StartIcon="@Icons.Material.Filled.Download" Size="Size.Small"
                        Disabled="Disabled" OnClick="OnClickDownloadVideo">
                 Download Selected Format
             </MudButton>
@@ -154,12 +149,12 @@
         else
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
-                       StartIcon="@Icons.Material.Filled.Star"
+                       StartIcon="@Icons.Material.Filled.Star" Size="Size.Small"
                        Disabled="Disabled" OnClick="OnClickDownloadBest">
                 @(IsPlaylist ? "Download All [video+audio]" : "Download Best")
             </MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
-                       StartIcon="@Icons.Material.Filled.AudioFile"
+                       StartIcon="@Icons.Material.Filled.AudioFile" Size="Size.Small"
                        Disabled="Disabled" OnClick="OnClickDownloadAudio">
                 @(IsPlaylist ? "Download All Audio" : "Download Audio")
             </MudButton>

@@ -65,7 +65,7 @@ public partial class App : Application
         {
             var ws = _settings.WindowState;
             window.Width = ws.Width > 0 ? ws.Width : 1188;
-            window.Height = ws.Height > 0 ? ws.Height : 800;
+            window.Height = ws.Height > 0 ? ws.Height : 850;
             if (ws.X >= 0 && ws.Y >= 0)
             {
                 window.X = ws.X;
@@ -75,10 +75,10 @@ public partial class App : Application
         else
         {
             window.Width = 1188;
-            window.Height = 800;
+            window.Height = 850;
         }
         window.MinimumWidth = 800;
-        window.MinimumHeight = 600;
+        window.MinimumHeight = 850;
 
         // System tray (item 24 — uses app icon via Shell_NotifyIcon)
         var tray = services.GetService<ITrayService>();

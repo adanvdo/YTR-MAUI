@@ -1,0 +1,30 @@
+.cp-title {
+    font-weight: 600;
+}
+
+.cp-format-display {
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 4px;
+}
+
+.cp-format-text {
+    font-family: monospace;
+    font-size: 0.7rem;
+}
+
+.cp-panel-segment {
+    min-height: 90px;
+}
+
+.cp-panel-crop {
+    min-height: 120px;
+}
+
+.cp-panel-convert {
+    min-height: 90px;
+}
+
+.cp-panel-limits {
+    min-height: 90px;
+}
