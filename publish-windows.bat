@@ -50,6 +50,10 @@ if not exist "installer\tools\ffmpeg.exe" (
     echo WARNING: installer\tools\ffmpeg.exe not found. Installer will fail.
     echo Download from: https://www.gyan.dev/ffmpeg/builds/
 )
+if not exist "installer\tools\ffprobe.exe" (
+    echo WARNING: installer\tools\ffprobe.exe not found. Installer will fail.
+    echo Download from: https://www.gyan.dev/ffmpeg/builds/
+)
 
 if exist %INNO_COMPILER% (
     %INNO_COMPILER% installer\YTR.iss

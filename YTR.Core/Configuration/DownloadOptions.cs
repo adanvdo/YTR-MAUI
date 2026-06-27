@@ -10,4 +10,7 @@ public sealed class DownloadOptions
     public bool UseTitleAsFileName { get; set; }
     public bool CreateFolderForPlaylists { get; set; } = true;
     public bool AutoOpenDownloadLocation { get; set; } = true;
+    public bool EnableHotkeys { get; set; }
+    public string HotkeyModifiers { get; set; } = "Ctrl+Shift";
+    public string HotkeyKey { get; set; } = "D";
 }

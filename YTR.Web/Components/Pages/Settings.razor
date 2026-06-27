@@ -1,138 +1,346 @@
 @page "/settings"
 @inject ISettingsService SettingsService
 @inject IFolderPickerService FolderPicker
+@inject IAppUpdateService AppUpdater
+@inject IDependencyUpdateService DependencyUpdater
+@inject IHotkeyService HotkeyService
 @inject NavigationManager Nav
 
 <PageTitle>YTR - Settings</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
-    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
-    <MudText Typo="Typo.h5">Settings</MudText>
-</MudStack>
+<div class="settings-tabs">
 
-@if (_validationError is not null)
-{
-    <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true"
-              CloseIconClicked="() => _validationError = null">
-        @_validationError
-    </MudAlert>
-}
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
+        <MudText Typo="Typo.h5">Settings</MudText>
+    </MudStack>
 
-@if (_saved)
-{
-    <MudAlert Severity="Severity.Success" Class="mb-4" ShowCloseIcon="true"
-              CloseIconClicked="() => _saved = false">
-        Settings saved.
-    </MudAlert>
-}
+    @if (_validationError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true"
+                CloseIconClicked="() => _validationError = null">
+            @_validationError
+        </MudAlert>
+    }
 
-<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
-    <MudTabPanel Text="Downloads">
-        <MudStack Spacing="3">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
-                              Label="Video Download Path" Variant="Variant.Outlined" Style="flex:1;" />
-                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
-                               OnClick="() => PickFolder(true)" />
+    @if (_saved)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4" ShowCloseIcon="true"
+                CloseIconClicked="() => _saved = false">
+            Settings saved.
+        </MudAlert>
+    }
+
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+
+        @* ════════════════════════════════════════════════════════════════════
+        GENERAL TAB — Downloads + History
+        ════════════════════════════════════════════════════════════════════ *@
+        <MudTabPanel Text="General">
+            <MudText Typo="Typo.h6" Class="mb-3">Downloads</MudText>
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
+                                Label="Video Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
+                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                                OnClick="() => PickFolder(true)" />
+                </MudStack>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
+                                Label="Audio Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
+                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                                OnClick="() => PickFolder(false)" />
+                </MudStack>
+                <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
+                        Label="Use video title as filename" Color="Color.Primary" />
+                <MudSwitch @bind-Value="SettingsService.Download.CreateFolderForPlaylists"
+                        Label="Create folder for playlist downloads" Color="Color.Primary" />
+                <MudSwitch @bind-Value="SettingsService.Download.AutoOpenDownloadLocation"
+                        Label="Auto-open download location" Color="Color.Primary" />
             </MudStack>
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
-                              Label="Audio Download Path" Variant="Variant.Outlined" Style="flex:1;" />
-                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
-                               OnClick="() => PickFolder(false)" />
+
+            <MudDivider Class="my-2" />
+
+            <MudText Typo="Typo.h6" Class="mb-3">History</MudText>
+            <MudStack Spacing="3">
+                <MudSwitch @bind-Value="SettingsService.History.Enabled"
+                        Label="Enable download history" Color="Color.Primary" />
+                <MudNumericField @bind-Value="SettingsService.History.RetentionDays"
+                                Label="History retention (days)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="365" />
             </MudStack>
-            <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
-                       Label="Use video title as filename" Color="Color.Primary" />
-            <MudSwitch @bind-Value="SettingsService.Download.CreateFolderForPlaylists"
-                       Label="Create folder for playlist downloads" Color="Color.Primary" />
-            <MudSwitch @bind-Value="SettingsService.Download.AutoOpenDownloadLocation"
-                       Label="Auto-open download location" Color="Color.Primary" />
-        </MudStack>
-    </MudTabPanel>
+        </MudTabPanel>
 
-    <MudTabPanel Text="Restrictions">
-        <MudStack Spacing="3">
-            <MudSwitch @bind-Value="SettingsService.Restrictions.EnforceRestrictions"
-                       Label="Enforce restrictions for new downloads" Color="Color.Primary" />
-            <MudSelect @bind-Value="SettingsService.Restrictions.MaxResolution"
-                       Label="Max Resolution" Variant="Variant.Outlined">
-                @foreach (var res in Enum.GetValues<Resolution>())
-                {
-                    <MudSelectItem Value="res">@res</MudSelectItem>
-                }
-            </MudSelect>
-            <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
-                             Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" Min="0" />
-        </MudStack>
-    </MudTabPanel>
+        @* ════════════════════════════════════════════════════════════════════
+        APPEARANCE TAB — Dark Mode, Format Mode, Segment Mode
+        ════════════════════════════════════════════════════════════════════ *@
+        <MudTabPanel Text="Appearance">
+            <MudStack Spacing="3">
+                <MudSwitch @bind-Value="SettingsService.Appearance.DarkMode"
+                        Label="Dark mode" Color="Color.Primary" />
+                <MudSelect @bind-Value="SettingsService.Appearance.FormatMode"
+                        Label="Format Mode" Variant="Variant.Outlined">
+                    @foreach (var mode in Enum.GetValues<FormatMode>())
+                    {
+                        <MudSelectItem Value="mode">@mode</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect @bind-Value="SettingsService.Appearance.SegmentMode"
+                        Label="Segment Mode" Variant="Variant.Outlined">
+                    @foreach (var mode in Enum.GetValues<SegmentMode>())
+                    {
+                        <MudSelectItem Value="mode">@mode</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+        </MudTabPanel>
 
-    <MudTabPanel Text="Processing">
-        <MudStack Spacing="3">
-            <MudSwitch @bind-Value="SettingsService.Processing.AlwaysConvertToPreferred"
-                       Label="Always convert to preferred format" Color="Color.Primary" />
-            <MudSelect @bind-Value="SettingsService.Processing.PreferredVideoFormat"
-                       Label="Preferred Video Format" Variant="Variant.Outlined">
-                @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif && f != VideoFormat.Unspecified))
-                {
-                    <MudSelectItem Value="fmt">@fmt</MudSelectItem>
-                }
-            </MudSelect>
-            <MudSelect @bind-Value="SettingsService.Processing.PreferredAudioFormat"
-                       Label="Preferred Audio Format" Variant="Variant.Outlined">
-                @foreach (var fmt in Enum.GetValues<AudioFormat>().Where(f => f != AudioFormat.Unspecified))
-                {
-                    <MudSelectItem Value="fmt">@fmt</MudSelectItem>
-                }
-            </MudSelect>
-            <MudSwitch @bind-Value="SettingsService.Processing.FetchMissingMetadata"
-                       Label="Fetch missing metadata when listing formats" Color="Color.Primary" />
-            <MudSwitch @bind-Value="SettingsService.Processing.VerboseOutput"
-                       Label="Verbose output" Color="Color.Primary" />
-        </MudStack>
-    </MudTabPanel>
+        @* ════════════════════════════════════════════════════════════════════
+        ADVANCED TAB — Processing, Restrictions, Hotkeys
+        ════════════════════════════════════════════════════════════════════ *@
+        <MudTabPanel Text="Advanced">
+          <div class="tab-panel-scroll">
+            <MudText Typo="Typo.h6" Class="mb-2">Processing</MudText>
+            <MudStack Spacing="1">
+                <MudSwitch @bind-Value="SettingsService.Processing.AlwaysConvertToPreferred"
+                        Label="Always convert to preferred format" Color="Color.Primary" />
+                <MudSelect @bind-Value="SettingsService.Processing.PreferredVideoFormat"
+                        Label="Preferred Video Format" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif && f != VideoFormat.Unspecified))
+                    {
+                        <MudSelectItem Value="fmt">@fmt</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect @bind-Value="SettingsService.Processing.PreferredAudioFormat"
+                        Label="Preferred Audio Format" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var fmt in Enum.GetValues<AudioFormat>().Where(f => f != AudioFormat.Unspecified))
+                    {
+                        <MudSelectItem Value="fmt">@fmt</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSwitch @bind-Value="SettingsService.Processing.FetchMissingMetadata"
+                        Label="Fetch missing metadata when listing formats" Color="Color.Primary" />
+                <MudSwitch @bind-Value="SettingsService.Processing.VerboseOutput"
+                        Label="Verbose output" Color="Color.Primary" />
+            </MudStack>
 
-    <MudTabPanel Text="History">
-        <MudStack Spacing="3">
-            <MudSwitch @bind-Value="SettingsService.History.Enabled"
-                       Label="Enable download history" Color="Color.Primary" />
-            <MudNumericField @bind-Value="SettingsService.History.RetentionDays"
-                             Label="History retention (days)" Variant="Variant.Outlined" Min="1" Max="365" />
-        </MudStack>
-    </MudTabPanel>
+            <MudDivider Class="my-2" />
 
-    <MudTabPanel Text="Advanced">
-        <MudStack Spacing="3">
-            <MudSelect @bind-Value="SettingsService.Updates.Channel"
-                       Label="Release Channel" Variant="Variant.Outlined">
-                @foreach (var ch in Enum.GetValues<ReleaseChannel>())
-                {
-                    <MudSelectItem Value="ch">@ch</MudSelectItem>
-                }
-            </MudSelect>
-            <MudSwitch @bind-Value="SettingsService.Appearance.DarkMode"
-                       Label="Dark mode" Color="Color.Primary" />
-        </MudStack>
-    </MudTabPanel>
+            <MudText Typo="Typo.h6" Class="mb-2">Restrictions</MudText>
+            <MudStack Spacing="3">
+                <MudSwitch @bind-Value="SettingsService.Restrictions.EnforceRestrictions"
+                        Label="Enforce restrictions for new downloads" Color="Color.Primary" />
+                <MudSelect @bind-Value="SettingsService.Restrictions.MaxResolution"
+                        Label="Max Resolution" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var res in Enum.GetValues<Resolution>())
+                    {
+                        <MudSelectItem Value="res">@res</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
+                                Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+            </MudStack>
 
-    <MudTabPanel Text="About">
-        <MudStack Spacing="2">
-            <MudText Typo="Typo.body1"><b>YTR</b> — Media Downloader</MudText>
-            <MudText Typo="Typo.body2">Version: @GetCurrentVersion()</MudText>
-            <MudText Typo="Typo.body2">Dependencies: yt-dlp + FFmpeg</MudText>
-            <MudText Typo="Typo.body2">yt-dlp: @(SettingsService.Updates.YtDlpLocalVersion ?? "unknown")</MudText>
-            <MudText Typo="Typo.body2">FFmpeg: @(SettingsService.Updates.FfmpegLocalVersion ?? "unknown")</MudText>
-            <MudLink Href="https://github.com/adanvdo/YT-RED-UI" Target="_blank">GitHub Repository</MudLink>
-            <MudText Typo="Typo.caption">Contact: jesse@jamgalactic.com</MudText>
-        </MudStack>
-    </MudTabPanel>
-</MudTabs>
+            <MudDivider Class="my-2" />
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
-           OnClick="SaveSettings">Save</MudButton>
+            <MudText Typo="Typo.h6" Class="mb-2">Hotkeys</MudText>
+            <MudStack Spacing="3">
+                <MudSwitch @bind-Value="SettingsService.Download.EnableHotkeys"
+                        Label="Enable global hotkey (Quick Download)" Color="Color.Primary" />
+                <MudStack Row="true" Spacing="2">
+                    <MudSelect @bind-Value="SettingsService.Download.HotkeyModifiers"
+                            Label="Modifiers" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
+                            Disabled="@(!SettingsService.Download.EnableHotkeys)">
+                        <MudSelectItem Value="@("Ctrl")">Ctrl</MudSelectItem>
+                        <MudSelectItem Value="@("Shift")">Shift</MudSelectItem>
+                        <MudSelectItem Value="@("Alt")">Alt</MudSelectItem>
+                        <MudSelectItem Value="@("Ctrl+Shift")">Ctrl+Shift</MudSelectItem>
+                        <MudSelectItem Value="@("Ctrl+Alt")">Ctrl+Alt</MudSelectItem>
+                        <MudSelectItem Value="@("Alt+Shift")">Alt+Shift</MudSelectItem>
+                        <MudSelectItem Value="@("Ctrl+Alt+Shift")">Ctrl+Alt+Shift</MudSelectItem>
+                    </MudSelect>
+                    <MudSelect @bind-Value="SettingsService.Download.HotkeyKey"
+                            Label="Key" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
+                            Disabled="@(!SettingsService.Download.EnableHotkeys)">
+                        @foreach (var k in _availableKeys)
+                        {
+                            <MudSelectItem Value="k">@k</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Current: @(SettingsService.Download.EnableHotkeys
+                        ? $"{SettingsService.Download.HotkeyModifiers}+{SettingsService.Download.HotkeyKey}"
+                        : "Disabled")
+                </MudText>
+            </MudStack>
+          </div>
+        </MudTabPanel>
+
+        @* ════════════════════════════════════════════════════════════════════
+        ABOUT TAB — App info, Release Channel, Updates (App + Dependencies)
+        ════════════════════════════════════════════════════════════════════ *@
+        <MudTabPanel Text="About">
+            <MudGrid>
+                @* App Updates *@
+                <MudItem xs="12" md="6">
+                    <MudCard>
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">YTR — Media Downloader</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="1">                                
+                                <MudText Typo="Typo.body2">Version: v@(GetCurrentVersion())</MudText>
+                                @if (_appCheckError is not null)
+                                {
+                                    <MudAlert Severity="Severity.Error" Dense="true">@_appCheckError</MudAlert>
+                                }
+                                else if (_availableRelease is not null)
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">
+                                        v@(_availableRelease.Version) available (released @(_availableRelease.ReleaseDate.ToShortDateString()))
+                                    </MudAlert>
+                                }
+                                else if (_appChecked)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Success">You're up to date.</MudText>
+                                }
+                                <MudLink Href="https://github.com/adanvdo/YT-RED-UI" Target="_blank">GitHub Repository</MudLink>
+                                <MudText Typo="Typo.caption">Contact: jesse@jamgalactic.com</MudText>
+
+                                <MudDivider Class="my-2" />
+
+                                <MudSelect @bind-Value="SettingsService.Updates.Channel"
+                                        Label="Release Channel" Variant="Variant.Outlined" Class="mb-4">
+                                    @foreach (var ch in Enum.GetValues<ReleaseChannel>())
+                                    {
+                                        <MudSelectItem Value="ch">@ch</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudStack>
+                            @if (_appDownloading)
+                            {
+                                <MudProgressLinear Value="@(_appProgress * 100)" Class="mt-2" Color="Color.Primary" />
+                            }
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                    Disabled="_appChecking || _appDownloading"
+                                    OnClick="CheckForAppUpdate">
+                                @if (_appChecking) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                                Check for Updates
+                            </MudButton>
+                            @if (_availableRelease is not null && _downloadedPackagePath is null)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                                        Disabled="_appDownloading"
+                                        OnClick="DownloadAppUpdate">
+                                    Download
+                                </MudButton>
+                            }
+                            @if (_downloadedPackagePath is not null)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Warning" Class="ml-2"
+                                        OnClick="InstallAppUpdate">
+                                    Install &amp; Restart
+                                </MudButton>
+                            }
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+
+                @* Dependency Updates *@
+                <MudItem xs="12" md="6">
+                    <MudCard>
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">Dependencies</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.body2" Style="min-width:80px;"><b>yt-dlp</b></MudText>
+                                    <MudText Typo="Typo.body2">Installed: @(SettingsService.Updates.YtDlpLocalVersion ?? "unknown")</MudText>
+                                    @if (_latestYtDlp is not null)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">Latest: @_latestYtDlp</MudChip>
+                                    }
+                                </MudStack>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.body2" Style="min-width:80px;"><b>FFmpeg</b></MudText>
+                                    <MudText Typo="Typo.body2">Installed: @(SettingsService.Updates.FfmpegLocalVersion ?? "unknown")</MudText>
+                                    @if (_latestFfmpeg is not null)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">Latest: @_latestFfmpeg</MudChip>
+                                    }
+                                </MudStack>
+                                @if (_depError is not null)
+                                {
+                                    <MudAlert Severity="Severity.Error" Dense="true">@_depError</MudAlert>
+                                }
+                            </MudStack>
+                            @if (_depUpdating)
+                            {
+                                <MudProgressLinear Value="@(_depProgress * 100)" Class="mt-2" Color="Color.Secondary" />
+                            }
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                    Disabled="_depChecking || _depUpdating"
+                                    OnClick="CheckDependencyVersions">
+                                @if (_depChecking) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                                Check Versions
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                                    Disabled="@(_depUpdating || _latestYtDlp is null)"
+                                    OnClick="UpdateYtDlp">
+                                Update yt-dlp
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                                    Disabled="@(_depUpdating || _latestFfmpeg is null)"
+                                    OnClick="UpdateFfmpeg">
+                                Update FFmpeg
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>            
+        </MudTabPanel>
+    </MudTabs>
+
+    <div class="settings-save-bar">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+            OnClick="SaveSettings">Save</MudButton>
+    </div>
+</div>
 
 @code {
     private string? _validationError;
     private bool _saved;
+
+    // Available hotkey keys
+    private static readonly string[] _availableKeys = new[]
+    {
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"
+    };
+
+    // App update state
+    private bool _appChecking;
+    private bool _appChecked;
+    private bool _appDownloading;
+    private double _appProgress;
+    private string? _appCheckError;
+    private AppRelease? _availableRelease;
+    private string? _downloadedPackagePath;
+
+    // Dependency update state
+    private bool _depChecking;
+    private bool _depUpdating;
+    private double _depProgress;
+    private string? _depError;
+    private string? _latestYtDlp;
+    private string? _latestFfmpeg;
 
     private async Task SaveSettings()
     {
@@ -142,6 +350,14 @@
             return;
 
         await SettingsService.SaveAsync();
+
+        // Re-register hotkey with updated settings
+        HotkeyService.Unregister();
+        if (SettingsService.Download.EnableHotkeys)
+        {
+            HotkeyService.Register();
+        }
+
         _saved = true;
     }
 
@@ -163,4 +379,149 @@
         var asm = System.Reflection.Assembly.GetEntryAssembly();
         return asm?.GetName().Version?.ToString(3) ?? "0.0.0";
     }
+
+    #region App Updates
+
+    private async Task CheckForAppUpdate()
+    {
+        _appChecking = true;
+        _appCheckError = null;
+        _availableRelease = null;
+        _downloadedPackagePath = null;
+        StateHasChanged();
+
+        var result = await AppUpdater.CheckForUpdateAsync(SettingsService.Updates.Channel);
+
+        if (result.IsSuccess)
+        {
+            _availableRelease = result.Value;
+            _appChecked = true;
+        }
+        else
+        {
+            _appCheckError = result.Error;
+        }
+
+        _appChecking = false;
+        StateHasChanged();
+    }
+
+    private async Task DownloadAppUpdate()
+    {
+        if (_availableRelease is null) return;
+
+        _appDownloading = true;
+        _appProgress = 0;
+        StateHasChanged();
+
+        var progress = new Progress<double>(p =>
+        {
+            _appProgress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        var result = await AppUpdater.DownloadUpdateAsync(_availableRelease, progress);
+
+        if (result.IsSuccess)
+        {
+            _downloadedPackagePath = result.Value;
+        }
+        else
+        {
+            _appCheckError = result.Error;
+        }
+
+        _appDownloading = false;
+        StateHasChanged();
+    }
+
+    private async Task InstallAppUpdate()
+    {
+        if (_downloadedPackagePath is null) return;
+        await AppUpdater.InstallUpdateAsync(_downloadedPackagePath);
+    }
+
+    #endregion
+
+    #region Dependency Updates
+
+    private async Task CheckDependencyVersions()
+    {
+        _depChecking = true;
+        _depError = null;
+        _latestYtDlp = null;
+        _latestFfmpeg = null;
+        StateHasChanged();
+
+        var ytTask = DependencyUpdater.GetLatestYtDlpVersionAsync();
+        var ffTask = DependencyUpdater.GetLatestFfmpegVersionAsync();
+
+        await Task.WhenAll(ytTask, ffTask);
+
+        var ytResult = await ytTask;
+        var ffResult = await ffTask;
+
+        if (ytResult.IsSuccess) _latestYtDlp = ytResult.Value;
+        if (ffResult.IsSuccess) _latestFfmpeg = ffResult.Value;
+
+        if (ytResult.IsFailure && ffResult.IsFailure)
+            _depError = $"yt-dlp: {ytResult.Error} | FFmpeg: {ffResult.Error}";
+        else if (ytResult.IsFailure)
+            _depError = $"yt-dlp check failed: {ytResult.Error}";
+        else if (ffResult.IsFailure)
+            _depError = $"FFmpeg check failed: {ffResult.Error}";
+
+        _depChecking = false;
+        StateHasChanged();
+    }
+
+    private async Task UpdateYtDlp()
+    {
+        _depUpdating = true;
+        _depProgress = 0;
+        _depError = null;
+        StateHasChanged();
+
+        var progress = new Progress<double>(p =>
+        {
+            _depProgress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        var result = await DependencyUpdater.UpdateYtDlpAsync(progress);
+
+        if (result.IsFailure)
+            _depError = result.Error;
+        else
+            _latestYtDlp = null;
+
+        _depUpdating = false;
+        StateHasChanged();
+    }
+
+    private async Task UpdateFfmpeg()
+    {
+        _depUpdating = true;
+        _depProgress = 0;
+        _depError = null;
+        StateHasChanged();
+
+        var progress = new Progress<double>(p =>
+        {
+            _depProgress = p;
+            InvokeAsync(StateHasChanged);
+        });
+
+        var result = await DependencyUpdater.UpdateFfmpegAsync(progress);
+
+        if (result.IsFailure)
+            _depError = result.Error;
+        else
+            _latestFfmpeg = null;
+
+        _depUpdating = false;
+        StateHasChanged();
+    }
+
+    #endregion
 }

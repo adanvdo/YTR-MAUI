@@ -13,17 +13,15 @@ public sealed class WindowsHotkeyService : IHotkeyService, IDisposable
     private const int WM_HOTKEY = 0x0312;
     private const int HOTKEY_ID = 9000;
 
-    // Modifiers
+    // Modifier flags
+    private const uint MOD_ALT = 0x0001;
     private const uint MOD_CTRL = 0x0002;
     private const uint MOD_SHIFT = 0x0004;
-    private const uint MOD_ALT = 0x0001;
+    private const uint MOD_WIN = 0x0008;
     private const uint MOD_NOREPEAT = 0x4000;
 
-    // Default: Ctrl+Shift+D
-    private const uint DEFAULT_MODIFIERS = MOD_CTRL | MOD_SHIFT | MOD_NOREPEAT;
-    private const uint DEFAULT_VK = 0x44; // 'D'
-
     private readonly ILogger<WindowsHotkeyService> _logger;
+    private readonly ISettingsService _settings;
     private nint _windowHandle;
     private bool _registered;
     private Thread? _messageThread;
@@ -31,17 +29,37 @@ public sealed class WindowsHotkeyService : IHotkeyService, IDisposable
 
     public event Action? HotkeyPressed;
 
-    public WindowsHotkeyService(ILogger<WindowsHotkeyService> logger)
+    public WindowsHotkeyService(ILogger<WindowsHotkeyService> logger, ISettingsService settings)
     {
         _logger = logger;
+        _settings = settings;
     }
 
     public bool Register()
     {
-        if (_registered) return true;
+        var modifiers = _settings.Download.HotkeyModifiers;
+        var key = _settings.Download.HotkeyKey;
+        return Register(modifiers, key);
+    }
+
+    public bool Register(string modifiers, string key)
+    {
+        if (_registered) Unregister();
+
+        var modFlag = ParseModifiers(modifiers) | MOD_NOREPEAT;
+        var vk = ParseVirtualKey(key);
+
+        if (vk == 0)
+        {
+            _logger.LogWarning("Invalid hotkey key: {Key}", key);
+            return false;
+        }
 
         _running = true;
-        _messageThread = new Thread(MessageLoop)
+        var capturedMod = modFlag;
+        var capturedVk = vk;
+
+        _messageThread = new Thread(() => MessageLoop(capturedMod, capturedVk))
         {
             IsBackground = true,
             Name = "HotkeyMessageLoop"
@@ -49,7 +67,7 @@ public sealed class WindowsHotkeyService : IHotkeyService, IDisposable
         _messageThread.SetApartmentState(ApartmentState.STA);
         _messageThread.Start();
 
-        // Give the message loop time to create the window
+        // Give the message loop time to create the window and register
         Thread.Sleep(100);
         return _registered;
     }
@@ -65,9 +83,10 @@ public sealed class WindowsHotkeyService : IHotkeyService, IDisposable
             PostMessage(_windowHandle, 0x0012 /* WM_QUIT */, 0, 0);
         }
         _registered = false;
+        _messageThread = null;
     }
 
-    private void MessageLoop()
+    private void MessageLoop(uint modifiers, uint vk)
     {
         // Create a message-only window
         _windowHandle = CreateWindowEx(0, "STATIC", "", 0, 0, 0, 0, 0, new nint(-3) /* HWND_MESSAGE */, 0, 0, 0);
@@ -78,14 +97,14 @@ public sealed class WindowsHotkeyService : IHotkeyService, IDisposable
             return;
         }
 
-        _registered = RegisterHotKey(_windowHandle, HOTKEY_ID, DEFAULT_MODIFIERS, DEFAULT_VK);
+        _registered = RegisterHotKey(_windowHandle, HOTKEY_ID, modifiers, vk);
         if (!_registered)
         {
-            _logger.LogWarning("Failed to register hotkey (Ctrl+Shift+D). It may be in use by another application.");
+            _logger.LogWarning("Failed to register hotkey. It may be in use by another application.");
             return;
         }
 
-        _logger.LogInformation("Global hotkey registered: Ctrl+Shift+D");
+        _logger.LogInformation("Global hotkey registered.");
 
         // Message pump
         while (_running && GetMessage(out var msg, 0, 0, 0) > 0)
@@ -97,6 +116,62 @@ public sealed class WindowsHotkeyService : IHotkeyService, IDisposable
             TranslateMessage(ref msg);
             DispatchMessage(ref msg);
         }
+    }
+
+    /// <summary>
+    /// Parses a modifier string like "Ctrl+Shift" or "Alt+Ctrl" into Win32 modifier flags.
+    /// </summary>
+    private static uint ParseModifiers(string modifiers)
+    {
+        uint flags = 0;
+        if (string.IsNullOrWhiteSpace(modifiers)) return flags;
+
+        var parts = modifiers.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in parts)
+        {
+            switch (part.ToUpperInvariant())
+            {
+                case "CTRL":
+                case "CONTROL":
+                    flags |= MOD_CTRL;
+                    break;
+                case "SHIFT":
+                    flags |= MOD_SHIFT;
+                    break;
+                case "ALT":
+                    flags |= MOD_ALT;
+                    break;
+                case "WIN":
+                case "WINDOWS":
+                    flags |= MOD_WIN;
+                    break;
+            }
+        }
+        return flags;
+    }
+
+    /// <summary>
+    /// Parses a single key string (e.g. "D", "F1", "0") into a Win32 virtual key code.
+    /// </summary>
+    private static uint ParseVirtualKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return 0;
+
+        key = key.Trim().ToUpperInvariant();
+
+        // Single letter A-Z
+        if (key.Length == 1 && key[0] >= 'A' && key[0] <= 'Z')
+            return (uint)key[0]; // VK_A through VK_Z
+
+        // Single digit 0-9
+        if (key.Length == 1 && key[0] >= '0' && key[0] <= '9')
+            return (uint)key[0]; // VK_0 through VK_9
+
+        // Function keys F1-F24
+        if (key.StartsWith('F') && int.TryParse(key[1..], out int fNum) && fNum >= 1 && fNum <= 24)
+            return (uint)(0x6F + fNum); // VK_F1 = 0x70
+
+        return 0;
     }
 
     public void Dispose()

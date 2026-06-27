@@ -27,6 +27,7 @@ public sealed class WindowsPlatformService : IPlatformService
             "yt-dlp" or "ytdlp" => FindExecutable(resourcesDir, "yt-dlp.exe"),
             "ffmpeg" => FindExecutable(resourcesDir, "ffmpeg.exe"),
             "ffprobe" => FindExecutable(resourcesDir, "ffprobe.exe"),
+            "node" or "nodejs" => FindExecutable(resourcesDir, "node.exe"),
             _ => Path.Combine(resourcesDir, resourceName)
         };
     }

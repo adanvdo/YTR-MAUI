@@ -96,7 +96,11 @@ public partial class App : Application
 
         // Global hotkey (item 23 — reads from settings)
         var hotkey = services.GetService<IHotkeyService>();
-        hotkey?.Register();
+        var settings = services.GetRequiredService<ISettingsService>();
+        if (settings.Download.EnableHotkeys)
+        {
+            hotkey?.Register();
+        }
 
         // Quick download handler
         var quickDl = services.GetService<Platforms.Windows.QuickDownloadHandler>();

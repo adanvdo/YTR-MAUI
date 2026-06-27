@@ -11,6 +11,11 @@ public interface IHotkeyService
     bool Register();
 
     /// <summary>
+    /// Registers a hotkey with the specified modifiers and key. Returns true if successful.
+    /// </summary>
+    bool Register(string modifiers, string key);
+
+    /// <summary>
     /// Unregisters the hotkey.
     /// </summary>
     void Unregister();

@@ -7,6 +7,7 @@
         <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
                            Rounded="true" Size="Size.Small" Class="status-progress"
                            Indeterminate="@(State.CurrentProgress.Progress <= 0)" />
+                           
         <div class="status-text">
             <span>@State.StatusMessage</span>
             @if (State.CurrentProgress.Speed is not null)
@@ -16,11 +17,6 @@
             @if (State.CurrentProgress.Eta is not null)
             {
                 <span> (ETA: @State.CurrentProgress.Eta)</span>
-            }
-            @if (State.CanCancel)
-            {
-                <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
-                               Size="Size.Small" OnClick="State.Cancel" Class="status-cancel" />
             }
         </div>
     }

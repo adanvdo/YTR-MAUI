@@ -59,6 +59,18 @@ html, body {
 /* Format grid: prevent text wrapping in cells for compact rows */
 .format-grid .mud-table-cell {
     white-space: nowrap;
+    cursor: default;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+}
+
+.format-grid .mud-table-cell.mud-table-cell-header {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+}
+
+.format-grid .mud-table-row:hover td {
+    background-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 /* Home page fixed layout */
@@ -90,8 +102,9 @@ html, body {
 
 .home-scrollable {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .home-sidebar {
@@ -106,6 +119,8 @@ html, body {
     border-top: 1px solid rgba(255,255,255,0.08);
     height: 20px;
 }
+
+
 
 .status-bar {
     height: 20px;
@@ -177,4 +192,53 @@ html, body {
 .control-panel .mud-collapse-container,
 .control-panel .mud-collapse-wrapper {
     overflow: hidden !important;
+}
+
+/* Make format grid fill available height */
+.home-scrollable > * {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Format grid container fills available flex space */
+.format-grid-container {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Grid itself fills remaining space and scrolls rows */
+.format-grid-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.format-grid-scroll .mud-table-container {
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+/* Scrollable tab panel content */
+.tab-panel-scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.settings-tabs .mud-card-header,
+.settings-tabs .mud-card-content {
+    padding: 8px 16px 8px 16px !important;
+}
+
+/* Settings save button anchored to bottom */
+.settings-save-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 24px;
+    background: inherit;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 10;
 }

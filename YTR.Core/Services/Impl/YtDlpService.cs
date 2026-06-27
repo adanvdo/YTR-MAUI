@@ -46,9 +46,16 @@ public sealed partial class YtDlpService : IYtDlpService
 
     private string YtDlpPath => _platform.GetResourcePath("yt-dlp");
 
+    private string NodePath => _platform.GetResourcePath("node");
+
+    /// <summary>
+    /// Builds the --js-runtimes argument pointing to the bundled node.exe.
+    /// </summary>
+    private string JsRuntimesArg => $"--js-runtimes node:\"{NodePath}\"";
+
     public async Task<Result<MediaMetadata>> GetMediaInfoAsync(string url, CancellationToken ct = default)
     {
-        var args = $"--dump-json --no-playlist \"{url}\"";
+        var args = $"{JsRuntimesArg} --dump-json --no-playlist \"{url}\"";
         var result = await _processRunner.RunAsync(new ProcessRequest
         {
             Executable = YtDlpPath,
@@ -75,7 +82,7 @@ public sealed partial class YtDlpService : IYtDlpService
 
     public async Task<Result<MediaMetadata>> GetPlaylistInfoAsync(string url, CancellationToken ct = default)
     {
-        var args = $"--flat-playlist --dump-single-json \"{url}\"";
+        var args = $"{JsRuntimesArg} --flat-playlist --dump-single-json \"{url}\"";
         var result = await _processRunner.RunAsync(new ProcessRequest
         {
             Executable = YtDlpPath,
@@ -102,7 +109,7 @@ public sealed partial class YtDlpService : IYtDlpService
 
     public async Task<Result<IReadOnlyList<string>>> GetFormatUrlsAsync(string url, string format, CancellationToken ct = default)
     {
-        var args = $"--get-url -f \"{format}\" \"{url}\"";
+        var args = $"{JsRuntimesArg} --get-url -f \"{format}\" \"{url}\"";
         var result = await _processRunner.RunAsync(new ProcessRequest
         {
             Executable = YtDlpPath,
@@ -247,6 +254,7 @@ public sealed partial class YtDlpService : IYtDlpService
     {
         var args = new List<string>
         {
+            JsRuntimesArg,
             $"-f \"{format}\"",
             $"-o \"{outputTemplate}\"",
             "--no-playlist",

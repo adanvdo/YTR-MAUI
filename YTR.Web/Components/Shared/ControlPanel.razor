@@ -1,4 +1,5 @@
 @using YTR.Core.Services
+@inject DownloadStateService State
 @inject ISettingsService Settings
 @inject IDialogService DialogService
 
@@ -157,6 +158,16 @@
                        StartIcon="@Icons.Material.Filled.AudioFile" Size="Size.Small"
                        Disabled="Disabled" OnClick="OnClickDownloadAudio">
                 @(IsPlaylist ? "Download All Audio" : "Download Audio")
+            </MudButton>
+        }
+
+        @if (State.CanCancel)
+        {            
+            <MudButton Variant="Variant.Filled" FullWidth="true"
+                        StartIcon="@Icons.Material.Filled.Cancel" Color="Color.Error"
+                        Size="Size.Small" OnClick="State.Cancel" 
+                        Class="status-cancel">
+                        "Cancel Download"
             </MudButton>
         }
     </MudStack>

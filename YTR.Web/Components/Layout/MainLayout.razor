@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
+@inject ISettingsService SettingsService
 
-<MudThemeProvider @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudThemeProvider @bind-IsDarkMode="SettingsService.Appearance.DarkMode" Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -15,10 +16,6 @@
                        Color="Color.Inherit" />
         <MudIconButton Href="/settings" Icon="@Icons.Material.Filled.Settings"
                        Color="Color.Inherit" />
-        <MudIconButton Href="/updates" Icon="@Icons.Material.Filled.SystemUpdateAlt"
-                       Color="Color.Inherit" />
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                       Color="Color.Inherit" OnClick="@ToggleTheme" />
     </MudAppBar>
 
     <MudMainContent Style="height: calc(100vh - 48px); overflow: hidden; padding: 16px 16px 8px 16px; margin-top: 48px;">
@@ -27,8 +24,6 @@
 </MudLayout>
 
 @code {
-    private bool _isDarkMode = true;
-
     private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
@@ -46,6 +41,4 @@
             AppbarBackground = "#181825"
         }
     };
-
-    private void ToggleTheme() => _isDarkMode = !_isDarkMode;
 }

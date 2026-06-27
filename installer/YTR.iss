@@ -47,6 +47,7 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Source: "tools\yt-dlp.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 Source: "tools\ffmpeg.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 Source: "tools\ffprobe.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
+Source: "tools\node.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
