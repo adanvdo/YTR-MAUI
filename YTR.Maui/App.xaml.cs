@@ -18,18 +18,34 @@ public partial class App : Application
 
     private const int SW_RESTORE = 9;
     private const int SW_SHOW = 5;
+    private const int SW_HIDE = 0;
+
+    [DllImport("user32.dll")]
+    private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern nint CallWindowProc(nint lpPrevWndFunc, nint hWnd, uint msg, nint wParam, nint lParam);
+
+    private delegate nint WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    private const int GWL_WNDPROC = -4;
+    private const uint WM_SYSCOMMAND = 0x0112;
+    private const uint WM_CLOSE = 0x0010;
+    private const nint SC_MINIMIZE = 0xF020;
+
+    private nint _originalWndProc;
+    private WndProcDelegate? _wndProcDelegate;
+    private nint _hwnd;
+    private bool _isExiting;
 #endif
 
     public App(AppStartup startup)
     {
         InitializeComponent();
         _startup = startup;
-
-        Task.Run(async () =>
-        {
-            try { await _startup.InitializeAsync(); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Startup failed: {ex.Message}"); }
-        });
     }
 
     protected override Window CreateWindow(IActivationState? activationState)
@@ -60,6 +76,34 @@ public partial class App : Application
             return;
         }
 
+        // Run async initialization (DB, migration, settings load) then register hotkey
+        Task.Run(async () =>
+        {
+            try
+            {
+                await _startup.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Startup failed: {ex.Message}");
+                return;
+            }
+
+            // Register hotkey after settings are loaded
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                var hotkey = services.GetService<IHotkeyService>();
+                if (_settings?.Download.EnableHotkeys == true)
+                {
+                    hotkey?.Register();
+                }
+
+                // Quick download handler
+                var quickDl = services.GetService<Platforms.Windows.QuickDownloadHandler>();
+                quickDl?.Initialize();
+            });
+        });
+
         // Restore window state (item 22)
         if (_settings is not null)
         {
@@ -89,35 +133,50 @@ public partial class App : Application
             tray.ShowRequested += () => MainThread.BeginInvokeOnMainThread(() => RestoreWindow(window));
             tray.ExitRequested += () => MainThread.BeginInvokeOnMainThread(() =>
             {
+                _isExiting = true;
                 SaveWindowState(window);
+                // Ensure window is visible so MAUI can close it properly
+                if (_hwnd != 0)
+                    ShowWindow(_hwnd, SW_SHOW);
                 Current?.Quit();
             });
         }
 
-        // Global hotkey (item 23 — reads from settings)
-        var hotkey = services.GetService<IHotkeyService>();
-        var settings = services.GetRequiredService<ISettingsService>();
-        if (settings.Download.EnableHotkeys)
+        // Minimize to tray (item 25) — subclass the window to intercept minimize and close
+        window.Created += (_, _) =>
         {
-            hotkey?.Register();
+            var nativeWindow = window.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+            if (nativeWindow is not null)
+            {
+                _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
+                _wndProcDelegate = new WndProcDelegate(WndProc);
+                _originalWndProc = SetWindowLongPtr(_hwnd, GWL_WNDPROC,
+                    Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
+            }
+        };
+
+        window.Destroying += (_, _) => SaveWindowState(window);
+    }
+
+    private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
+    {
+        // Intercept minimize → hide window to tray (but not when exiting)
+        if (msg == WM_SYSCOMMAND && (wParam & 0xFFF0) == SC_MINIMIZE && !_isExiting)
+        {
+            ShowWindow(hWnd, SW_HIDE);
+            return 0;
         }
 
-        // Quick download handler
-        var quickDl = services.GetService<Platforms.Windows.QuickDownloadHandler>();
-        quickDl?.Initialize();
-
-        // Minimize to tray (item 25)
-        window.Destroying += (_, _) => SaveWindowState(window);
+        return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
     }
 
     private void RestoreWindow(Window window)
     {
-        var nativeWindow = window.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
-        if (nativeWindow is not null)
+        if (_hwnd != 0)
         {
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
-            ShowWindow(hwnd, SW_RESTORE);
-            SetForegroundWindow(hwnd);
+            ShowWindow(_hwnd, SW_SHOW);
+            ShowWindow(_hwnd, SW_RESTORE);
+            SetForegroundWindow(_hwnd);
         }
     }
 

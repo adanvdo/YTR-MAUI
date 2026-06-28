@@ -6,7 +6,7 @@
 <PageTitle>YTR - History</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
-    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
+    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" Title="Close" />
     <MudText Typo="Typo.h5">Download History</MudText>
     <MudSpacer />
     @* Delete buttons (item 17) *@
@@ -32,16 +32,16 @@
                          Color="@(FileExists(context.Item) ? Color.Success : Color.Warning)" Size="Size.Small" />
             </CellTemplate>
         </TemplateColumn>
-        <PropertyColumn Property="x => x.Platform" Title="Platform" />
-        <PropertyColumn Property="x => x.Title" Title="Title" />
-        <PropertyColumn Property="x => x.StreamKind" Title="Type" />
-        <PropertyColumn Property="x => x.DownloadedAt" Title="Downloaded" Format="g" />
+        <PropertyColumn T="DownloadRecord" TProperty="MediaPlatform" Property="x => x.Platform" Title="Platform" />
+        <PropertyColumn T="DownloadRecord" TProperty="string" Property="x => x.Title" Title="Title" />
+        <PropertyColumn T="DownloadRecord" TProperty="StreamKind" Property="x => x.StreamKind" Title="Type" />
+        <PropertyColumn T="DownloadRecord" TProperty="DateTime" Property="x => x.DownloadedAt" Title="Downloaded" Format="g" />
         <TemplateColumn Title="Actions" Sortable="false">
             <CellTemplate>
                 <MudStack Row="true" Spacing="1">
                     <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small"
                                    OnClick="@(() => OpenLocation(context.Item))"
-                                   Disabled="@(!FileExists(context.Item))" />
+                                   Disabled="@(!FileExists(context.Item))" Title="Open file location" />
                     <MudIconButton Icon="@Icons.Material.Filled.Replay" Size="Size.Small"
                                    OnClick="@(() => ReDownload(context.Item))"
                                    Title="Re-download with same settings" />

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ],
+      "autoApprove": [
+        "codegraph_explore"
+      ]
+    }
+  }
+}

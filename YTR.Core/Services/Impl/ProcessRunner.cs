@@ -47,6 +47,7 @@ public sealed class ProcessRunner : IProcessRunner
         {
             if (e.Data is null) return;
             stderr.AppendLine(e.Data);
+            request.OnErrorLine?.Invoke(e.Data);
         };
 
         try

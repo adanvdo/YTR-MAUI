@@ -70,16 +70,11 @@ public sealed class WindowsPlatformService : IPlatformService
 
     private static string FindExecutable(string baseDir, string fileName)
     {
-        // Check resources dir first, then AppData (for updated versions)
         var appDataPath = Path.Combine(FileSystem.AppDataDirectory, fileName);
         if (File.Exists(appDataPath))
             return appDataPath;
 
-        var resourcePath = Path.Combine(baseDir, fileName);
-        if (File.Exists(resourcePath))
-            return resourcePath;
-
-        // Fallback: assume it's on PATH
-        return fileName;
+        var resourcePath = Path.Combine(baseDir, fileName);        
+        return resourcePath;
     }
 }

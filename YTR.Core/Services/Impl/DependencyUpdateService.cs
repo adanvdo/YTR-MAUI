@@ -20,7 +20,9 @@ public sealed class DependencyUpdateService : IDependencyUpdateService
     private const string YtDlpTagsUrl = "https://api.github.com/repos/yt-dlp/yt-dlp/tags";
     private const string YtDlpDownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
     private const string FfmpegVersionUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.7z.ver";
-    private const string FfmpegDownloadUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+    private const string FfmpegDownloadUrl = "https://github.com/GyanD/codexffmpeg/releases/latest/download/ffmpeg-{0}-essentials_build.zip";
+
+    private string latestFfmpegVersion = string.Empty;
 
     public DependencyUpdateService(
         IHttpClientFactory httpClientFactory,
@@ -68,6 +70,7 @@ public sealed class DependencyUpdateService : IDependencyUpdateService
                 return Result<string?>.Failure($"FFmpeg version check returned {response.StatusCode}.");
 
             var version = (await response.Content.ReadAsStringAsync(ct)).Trim();
+            this.latestFfmpegVersion = version;
             return Result<string?>.Success(version);
         }
         catch (Exception ex)
@@ -138,12 +141,17 @@ public sealed class DependencyUpdateService : IDependencyUpdateService
     {
         try
         {
+            if (string.IsNullOrEmpty(this.latestFfmpegVersion))
+            {
+                await GetLatestFfmpegVersionAsync(ct);
+            }
+
             var tempDir = Path.Combine(_platform.AppDataDirectory, "Temp");
             Directory.CreateDirectory(tempDir);
             var zipPath = Path.Combine(tempDir, "ffmpeg-release-essentials.zip");
 
             // Download zip
-            using var response = await _httpClient.GetAsync(FfmpegDownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _httpClient.GetAsync(string.Format(FfmpegDownloadUrl, latestFfmpegVersion), HttpCompletionOption.ResponseHeadersRead, ct);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? -1;

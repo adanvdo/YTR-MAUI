@@ -117,13 +117,11 @@ html, body {
 .home-status {
     flex-shrink: 0;
     border-top: 1px solid rgba(255,255,255,0.08);
-    height: 20px;
+    height: 25px;
 }
 
-
-
 .status-bar {
-    height: 20px;
+    height: 25px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -219,11 +217,32 @@ html, body {
     overflow-y: auto;
 }
 
-/* Scrollable tab panel content */
-.tab-panel-scroll {
-    max-height: 60vh;
-    overflow-y: auto;
-    padding-right: 10px;
+/* Scroll fade indicator — sits below MudTabs, shown/hidden via JS */
+.scroll-fade-indicator {
+    display: none;
+    position: relative;
+    height: 28px;
+    background: linear-gradient(to bottom, rgba(124, 77, 255, 0.15), rgba(124, 77, 255, 0.35));
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.scroll-fade-indicator.visible {
+    display: flex;
+}
+
+/* Down chevron arrow */
+.scroll-fade-indicator::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid rgba(255, 255, 255, 0.85);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.85);
+    transform: rotate(45deg);
+    margin-top: -4px;
 }
 
 .settings-tabs .mud-card-header,
@@ -231,9 +250,16 @@ html, body {
     padding: 8px 16px 8px 16px !important;
 }
 
+/* Make the tab panels container scrollable with a max height */
+.settings-tabs .mud-tabs-panels {
+    max-height: 60vh;
+    overflow-y: auto !important;
+}
+
 /* Settings save button anchored to bottom */
 .settings-save-bar {
     position: fixed;
+    display: flex;
     bottom: 0;
     left: 0;
     right: 0;
@@ -241,4 +267,8 @@ html, body {
     background: inherit;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 10;
+}
+
+.settings-save-bar .mud-alert {
+    padding: 0;
 }

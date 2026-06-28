@@ -24,6 +24,11 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
     private const int IDM_QUICKDL = 1002;
     private const int IDM_EXIT = 1003;
 
+    private nint _originalWndProc;
+    private WndProcDelegate? _wndProcDelegate;
+
+    private delegate nint WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
+
     public event Action? ShowRequested;
     public event Action? QuickDownloadRequested;
     public event Action? ExitRequested;
@@ -93,6 +98,11 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
             return;
         }
 
+        // Subclass the window to handle WM_COMMAND and tray callbacks
+        _wndProcDelegate = new WndProcDelegate(TrayWndProc);
+        _originalWndProc = SetWindowLongPtr(_windowHandle, -4 /* GWL_WNDPROC */,
+            Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
+
         // Add tray icon
         var nid = new NOTIFYICONDATA
         {
@@ -109,32 +119,39 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
         // Message pump
         while (_running && GetMessage(out var msg, 0, 0, 0) > 0)
         {
-            if (msg.message == WM_USER_TRAY)
-            {
-                var lParam = (int)msg.lParam;
-                if (lParam == WM_LBUTTONDBLCLK)
-                {
-                    ShowRequested?.Invoke();
-                }
-                else if (lParam == WM_RBUTTONUP)
-                {
-                    ShowContextMenu();
-                }
-            }
-            else if (msg.message == WM_COMMAND)
-            {
-                var id = (int)(msg.wParam & 0xFFFF);
-                switch (id)
-                {
-                    case IDM_SHOW: ShowRequested?.Invoke(); break;
-                    case IDM_QUICKDL: QuickDownloadRequested?.Invoke(); break;
-                    case IDM_EXIT: ExitRequested?.Invoke(); break;
-                }
-            }
-
             TranslateMessage(ref msg);
             DispatchMessage(ref msg);
         }
+    }
+
+    private nint TrayWndProc(nint hWnd, uint msg, nint wParam, nint lParam)
+    {
+        if (msg == WM_USER_TRAY)
+        {
+            var trayMsg = (int)lParam;
+            if (trayMsg == WM_LBUTTONDBLCLK)
+            {
+                ShowRequested?.Invoke();
+                return 0;
+            }
+            else if (trayMsg == WM_RBUTTONUP)
+            {
+                ShowContextMenu();
+                return 0;
+            }
+        }
+        else if (msg == WM_COMMAND)
+        {
+            var id = (int)(wParam & 0xFFFF);
+            switch (id)
+            {
+                case IDM_SHOW: ShowRequested?.Invoke(); return 0;
+                case IDM_QUICKDL: QuickDownloadRequested?.Invoke(); return 0;
+                case IDM_EXIT: ExitRequested?.Invoke(); return 0;
+            }
+        }
+
+        return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
     }
 
     private void ShowContextMenu()
@@ -239,6 +256,12 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern nint CallWindowProc(nint lpPrevWndFunc, nint hWnd, uint msg, nint wParam, nint lParam);
 
     #endregion
 }

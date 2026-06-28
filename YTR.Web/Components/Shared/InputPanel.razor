@@ -2,14 +2,22 @@
 
 <MudPaper Class="pa-2" Elevation="1">
     <MudGrid>
-        <MudItem xs="12" sm="9" md="10">
-            <MudTextField @bind-Value="_url" Label="Media URL or Video ID"
+        <MudItem xs="@(HasData ? 9 : 12)" sm="@(HasData ? 7 : 9)" md="@(HasData ? 9 : 10)">
+            <MudTextField @bind-Value="_url"
+                          Label="Media URL or Video ID"
                           Variant="Variant.Outlined" Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Link"
                           Immediate="true" OnKeyDown="OnKeyDown"
                           Placeholder="Paste a YouTube, Reddit, Twitter, Twitch, Vimeo, Instagram, or TikTok URL" />
         </MudItem>
-        <MudItem xs="12" sm="3" md="2" Class="pl-3 pt-6 pr-0 pb-0 d-flex align-center">
+        @if (HasData)
+        {
+            <MudItem xs="3" sm="2" md="1" Class="pl-3 pt-6 pr-0 pb-0 d-flex align-center">
+                <MudIconButton Icon="@Icons.Material.Filled.SettingsBackupRestore"
+                    Color="Color.Inherit" OnClick="Reset" Title="Reset" />
+            </MudItem>
+        }
+        <MudItem xs="9" sm="1" md="2" Class="pl-3 pt-6 pr-0 pb-0 d-flex align-center">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                        OnClick="ListFormats" Disabled="_loading"
                        Style="white-space:nowrap;">
@@ -29,6 +37,8 @@
 
     [Parameter] public EventCallback<UrlAnalysisResult> OnUrlAnalyzed { get; set; }
     [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool HasData { get; set; }
+    [Parameter] public EventCallback OnReset { get; set; }
 
     protected override void OnParametersSet()
     {
@@ -49,6 +59,12 @@
         {
             _loading = IsLoading;
         }
+    }
+
+    private async Task Reset()
+    {
+        _url = string.Empty;
+        await OnReset.InvokeAsync();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)

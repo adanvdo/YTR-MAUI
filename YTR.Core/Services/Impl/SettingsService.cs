@@ -132,6 +132,10 @@ public sealed class SettingsService : ISettingsService
         public WindowStateOptions? WindowState { get; set; }
     }
 
+    public event Action? DarkModeChanged;
+
+    public void NotifyDarkModeChanged() => DarkModeChanged?.Invoke();
+
     public string? Validate()
     {
         if (string.IsNullOrWhiteSpace(Download.VideoDownloadPath))

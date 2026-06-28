@@ -74,6 +74,7 @@ public interface IMediaProcessor
         VideoFormat videoFormat,
         AudioFormat audioFormat,
         string outputPath,
+        TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default);
 }

@@ -184,7 +184,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             var record = new DownloadRecord
             {
                 Url = item.Url,
-                Title = item.Title ?? Path.GetFileNameWithoutExtension(lastFilePath),
+                Title = item.Title ?? Path.GetFileName(lastFilePath),
                 Platform = analysis.Platform,
                 StreamKind = streamKind,
                 DownloadedAt = DateTime.UtcNow,
@@ -233,7 +233,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
 
         // Build FFmpeg args for direct stream processing
         output?.Report("Processing from stream...");
-        progress?.Report(new DownloadProgress { State = DownloadState.PostProcessing });
+        progress?.Report(new DownloadProgress { State = DownloadState.Downloading });
 
         var opts = _settings.Download;
         var outputDir = GetOutputDirectory(streamKind, request.PlaylistFolder);
@@ -246,23 +246,25 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         var ext = targetFormat == VideoFormat.Gif ? ".gif" : VideoFormatToExtension(targetFormat);
         var outputPath = Path.Combine(outputDir, fileName + ext);
 
-        // Build FFmpeg command with stream URLs as inputs
-        var ffmpegArgs = BuildStreamProcessingArgs(videoUrl, audioUrl, request, targetFormat, outputPath);
+        // For progress calculation, ffmpeg needs to know the total expected output duration.
+        // Use segment duration if set, otherwise fall back to format pair duration or media duration from metadata.
+        var segmentDuration = request.SegmentDuration;
+        var totalDurationForProgress = segmentDuration ?? formatPair?.Duration ?? request.MediaDuration;
 
-        var ffmpegPath = new ProcessRequest
-        {
-            Executable = "ffmpeg", // Will be resolved by ProcessRunner or caller
-            Arguments = ffmpegArgs,
-            OnOutputLine = line => output?.Report(line)
-        };
+        IProgress<double>? ffmpegProgress = progress is not null
+            ? new DirectProgress<double>(pct => progress.Report(new DownloadProgress
+            {
+                State = DownloadState.Downloading,
+                Progress = pct
+            }))
+            : null;
 
-        // Use the media processor's underlying process runner indirectly via ConvertAsync
-        // For stream processing, we build a custom conversion
+        // Use the media processor's ConvertFromUrlsAsync with progress
         var result = await _mediaProcessor.ConvertFromUrlsAsync(
-            videoUrl, audioUrl, request.SegmentStart, request.SegmentDuration,
+            videoUrl, audioUrl, request.SegmentStart, segmentDuration,
             request.CropValues, request.ConvertVideo ?? VideoFormat.Unspecified,
             request.ConvertAudio ?? AudioFormat.Unspecified, outputPath,
-            ct: ct);
+            totalDuration: totalDurationForProgress, progress: ffmpegProgress, ct: ct);
 
         if (result.IsFailure)
             return Result<DownloadRecord>.Failure(result.Error!);
@@ -298,6 +300,15 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         progress?.Report(new DownloadProgress { State = DownloadState.PostProcessing });
         output?.Report("Post-processing...");
 
+        // Bridge IProgress<double> from ffmpeg to IProgress<DownloadProgress> for the UI
+        IProgress<double>? ffmpegProgress = progress is not null
+            ? new DirectProgress<double>(pct => progress.Report(new DownloadProgress
+            {
+                State = DownloadState.PostProcessing,
+                Progress = pct
+            }))
+            : null;
+
         var tempFiles = new List<string>();
         var currentPath = filePath;
 
@@ -310,7 +321,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                 output?.Report("Extracting segment...");
                 var segResult = await _mediaProcessor.ExtractSegmentAsync(
                     currentPath, request.SegmentStart.Value, request.SegmentDuration.Value,
-                    segOutput, ct: ct);
+                    segOutput, progress: ffmpegProgress, ct: ct);
 
                 if (segResult.IsSuccess)
                 {
@@ -336,7 +347,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                         output?.Report("Applying crop...");
                         var cropResult = await _mediaProcessor.CropAsync(
                             currentPath, crop.X, crop.Y, crop.Width, crop.Height,
-                            cropOutput, ct: ct);
+                            cropOutput, progress: ffmpegProgress, ct: ct);
 
                         if (cropResult.IsSuccess)
                         {
@@ -361,7 +372,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                 var gifOutput = Path.ChangeExtension(GenerateProcessedPath(currentPath, "_gif"), ".gif");
                 output?.Report("Converting to GIF...");
                 var gifResult = await _mediaProcessor.ConvertToGifAsync(
-                    currentPath, gifOutput, ct: ct);
+                    currentPath, gifOutput, progress: ffmpegProgress, ct: ct);
 
                 if (gifResult.IsSuccess)
                 {
@@ -376,7 +387,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                 output?.Report($"Converting to {request.ConvertVideo.Value}...");
                 var convResult = await _mediaProcessor.ConvertAsync(
                     currentPath, request.ConvertVideo.Value, request.ConvertAudio ?? AudioFormat.Unspecified,
-                    convOutput, ct: ct);
+                    convOutput, progress: ffmpegProgress, ct: ct);
 
                 if (convResult.IsSuccess)
                 {
@@ -391,7 +402,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                 output?.Report($"Converting to {request.ConvertAudio.Value}...");
                 var convResult = await _mediaProcessor.ConvertAsync(
                     currentPath, VideoFormat.Unspecified, request.ConvertAudio.Value,
-                    convOutput, ct: ct);
+                    convOutput, progress: ffmpegProgress, ct: ct);
 
                 if (convResult.IsSuccess)
                 {
@@ -430,7 +441,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         return new DownloadRecord
         {
             Url = url,
-            Title = Path.GetFileNameWithoutExtension(filePath),
+            Title = request?.Title ?? Path.GetFileNameWithoutExtension(filePath),
             Platform = analysis.Platform,
             StreamKind = streamKind,
             DownloadedAt = DateTime.UtcNow,

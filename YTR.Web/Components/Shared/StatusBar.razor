@@ -4,9 +4,16 @@
 <div class="status-bar">
     @if (State.IsDownloading)
     {
-        <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
-                           Rounded="true" Size="Size.Small" Class="status-progress"
-                           Indeterminate="@(State.CurrentProgress.Progress <= 0)" />
+        @if (State.CurrentProgress.Progress > 0)
+        {
+            <MudProgressLinear Value="@(State.CurrentProgress.Progress * 100)" Color="Color.Primary"
+                               Rounded="true" Size="Size.Small" Class="status-progress" />
+        }
+        else
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary"
+                               Rounded="true" Size="Size.Small" Class="status-progress" />
+        }
                            
         <div class="status-text">
             <span>@State.StatusMessage</span>

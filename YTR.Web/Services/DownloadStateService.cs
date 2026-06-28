@@ -37,6 +37,7 @@ public sealed class DownloadStateService
     public void Cancel()
     {
         _cts?.Cancel();
+        _currentProgress = new() { State = DownloadState.None };
         _statusMessage = "Cancelling...";
         OnStateChanged?.Invoke();
     }

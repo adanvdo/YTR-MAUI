@@ -12,7 +12,8 @@
     <div class="home-content">
         <div class="home-main">
             <div class="home-fixed-top">
-                <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" IsLoading="_loadingFormats" />
+                <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" IsLoading="_loadingFormats"
+                           HasData="_metadata is not null" OnReset="ResetAll" />
                 <VideoInfoPanel Class="mt-2" Metadata="_metadata" />
             </div>
 
@@ -57,11 +58,30 @@
     private bool _downloading;
     private bool _loadingFormats;
     private bool _hasFormatSelection;
+    private string _currentUrl = string.Empty;
+
+    private void OnUrlChanged(string url)
+    {
+        _currentUrl = url;
+    }
+
+    private void ResetAll()
+    {
+        _currentUrl = string.Empty;
+        _metadata = null;
+        _formats = null;
+        _selectedPair = null;
+        _selectedFormat = null;
+        _selectedPlaylistItems = null;
+        _hasFormatSelection = false;
+        State.UpdateStatus(string.Empty);
+    }
 
     private async Task OnUrlAnalyzed(UrlAnalysisResult analysis)
     {
         if (!analysis.IsValid) return;
 
+        _currentUrl = analysis.NormalizedUrl;
         State.UpdateStatus("Fetching formats...");
         _metadata = null;
         _formats = null;
@@ -106,13 +126,49 @@
         _selectedPlaylistItems = items;
     }
 
-    private async Task DownloadVideo(DownloadRequest request) => await ExecuteDownload(StreamKind.Video, request);
+    private async Task DownloadVideo(DownloadRequest request)
+    {
+        // "Download Selected Format" — use the StreamKind from the selected pair
+        var kind = _selectedPair?.StreamKind ?? StreamKind.Video;
+        await ExecuteDownload(kind, request);
+    }
     private async Task DownloadAudio(DownloadRequest request) => await ExecuteDownload(StreamKind.Audio, request);
     private async Task DownloadBest(DownloadRequest request) => await ExecuteDownload(StreamKind.AudioAndVideo, request);
 
     private async Task ExecuteDownload(StreamKind streamKind, DownloadRequest request)
     {
-        if (_metadata is null) return;
+        // If metadata hasn't been fetched yet (user didn't click List Formats), fetch it now
+        if (_metadata is null)
+        {
+            if (string.IsNullOrWhiteSpace(_currentUrl)) return;
+
+            var analysis = UrlAnalyzer.Analyze(_currentUrl);
+            if (!analysis.IsValid) return;
+
+            State.UpdateStatus("Fetching media info...");
+            _loadingFormats = true;
+            StateHasChanged();
+
+            var infoResult = analysis.IsPlaylist
+                ? await YtDlp.GetPlaylistInfoAsync(analysis.NormalizedUrl)
+                : await YtDlp.GetMediaInfoAsync(analysis.NormalizedUrl);
+
+            _loadingFormats = false;
+
+            if (infoResult.IsFailure || infoResult.Value is null)
+            {
+                State.UpdateStatus($"Error: {infoResult.Error}");
+                StateHasChanged();
+                return;
+            }
+
+            _metadata = infoResult.Value;
+            // Don't populate _formats — we only fetched metadata for the title/duration,
+            // not because the user asked to see the format list
+        }
+
+        // Attach the media title and duration so downstream services can use them
+        request = request with { Title = _metadata.Title, MediaDuration = _metadata.Duration };
 
         _downloading = true;
         StateHasChanged();

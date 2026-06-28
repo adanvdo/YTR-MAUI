@@ -2,6 +2,7 @@
 @inject DownloadStateService State
 @inject ISettingsService Settings
 @inject IDialogService DialogService
+@implements IDisposable
 
 <MudPaper Class="pa-2 control-panel" Elevation="1">
     <MudText Typo="Typo.caption" Class="mb-1 cp-title">Download Options</MudText>
@@ -167,7 +168,7 @@
                         StartIcon="@Icons.Material.Filled.Cancel" Color="Color.Error"
                         Size="Size.Small" OnClick="State.Cancel" 
                         Class="status-cancel">
-                        "Cancel Download"
+                        Cancel Download
             </MudButton>
         }
     </MudStack>
@@ -214,6 +215,8 @@
 
     protected override void OnInitialized()
     {
+        State.OnStateChanged += OnStateChanged;
+
         // Load segment mode from settings
         _segmentEndMode = Settings.Appearance.SegmentMode;
 
@@ -233,6 +236,16 @@
             _maxFileSize = Settings.Restrictions.MaxFileSizeMb;
             if (LimitsHasValues) _limitsExpanded = true;
         }
+    }
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        State.OnStateChanged -= OnStateChanged;
     }
 
     private string FormatSelectionText

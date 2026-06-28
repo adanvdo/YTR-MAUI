@@ -68,4 +68,20 @@
         <ProjectReference Include="..\YTR.Web\YTR.Web.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Resources\App\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="Resources\App\ffmpeg.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Resources\App\ffprobe.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Resources\App\yt-dlp.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
 </Project>

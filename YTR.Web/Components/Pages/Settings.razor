@@ -5,31 +5,17 @@
 @inject IDependencyUpdateService DependencyUpdater
 @inject IHotkeyService HotkeyService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>YTR - Settings</PageTitle>
 
 <div class="settings-tabs">
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
-        <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" />
+        <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" Title="Close" />
         <MudText Typo="Typo.h5">Settings</MudText>
-    </MudStack>
-
-    @if (_validationError is not null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true"
-                CloseIconClicked="() => _validationError = null">
-            @_validationError
-        </MudAlert>
-    }
-
-    @if (_saved)
-    {
-        <MudAlert Severity="Severity.Success" Class="mb-4" ShowCloseIcon="true"
-                CloseIconClicked="() => _saved = false">
-            Settings saved.
-        </MudAlert>
-    }
+    </MudStack>    
 
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
 
@@ -43,13 +29,13 @@
                     <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
                                 Label="Video Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
                     <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
-                                OnClick="() => PickFolder(true)" />
+                                OnClick="() => PickFolder(true)" Title="Browse" />
                 </MudStack>
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                     <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
                                 Label="Audio Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
                     <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
-                                OnClick="() => PickFolder(false)" />
+                                OnClick="() => PickFolder(false)" Title="Browse" />
                 </MudStack>
                 <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
                         Label="Use video title as filename" Color="Color.Primary" />
@@ -98,7 +84,6 @@
         ADVANCED TAB — Processing, Restrictions, Hotkeys
         ════════════════════════════════════════════════════════════════════ *@
         <MudTabPanel Text="Advanced">
-          <div class="tab-panel-scroll">
             <MudText Typo="Typo.h6" Class="mb-2">Processing</MudText>
             <MudStack Spacing="1">
                 <MudSwitch @bind-Value="SettingsService.Processing.AlwaysConvertToPreferred"
@@ -173,12 +158,7 @@
                         : "Disabled")
                 </MudText>
             </MudStack>
-          </div>
         </MudTabPanel>
-
-        @* ════════════════════════════════════════════════════════════════════
-        ABOUT TAB — App info, Release Channel, Updates (App + Dependencies)
-        ════════════════════════════════════════════════════════════════════ *@
         <MudTabPanel Text="About">
             <MudGrid>
                 @* App Updates *@
@@ -204,7 +184,7 @@
                                 {
                                     <MudText Typo="Typo.body2" Color="Color.Success">You're up to date.</MudText>
                                 }
-                                <MudLink Href="https://github.com/adanvdo/YT-RED-UI" Target="_blank">GitHub Repository</MudLink>
+                                <MudLink Href="https://github.com/adanvdo/YTR-MAUI" Target="_blank">GitHub Repository</MudLink>
                                 <MudText Typo="Typo.caption">Contact: jesse@jamgalactic.com</MudText>
 
                                 <MudDivider Class="my-2" />
@@ -261,7 +241,11 @@
                                     <MudText Typo="Typo.body2">Installed: @(SettingsService.Updates.YtDlpLocalVersion ?? "unknown")</MudText>
                                     @if (_latestYtDlp is not null)
                                     {
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">Latest: @_latestYtDlp</MudChip>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Update: @_latestYtDlp</MudChip>
+                                    }
+                                    else if (_depChecked)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Up to date</MudChip>
                                     }
                                 </MudStack>
                                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
@@ -269,7 +253,11 @@
                                     <MudText Typo="Typo.body2">Installed: @(SettingsService.Updates.FfmpegLocalVersion ?? "unknown")</MudText>
                                     @if (_latestFfmpeg is not null)
                                     {
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">Latest: @_latestFfmpeg</MudChip>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Update: @_latestFfmpeg</MudChip>
+                                    }
+                                    else if (_depChecked)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Up to date</MudChip>
                                     }
                                 </MudStack>
                                 @if (_depError is not null)
@@ -305,16 +293,46 @@
             </MudGrid>            
         </MudTabPanel>
     </MudTabs>
+    <div class="scroll-fade-indicator"></div>
 
     <div class="settings-save-bar">
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
             OnClick="SaveSettings">Save</MudButton>
+
+        @if (_validationError is not null)
+        {
+            <MudAlert Severity="Severity.Error" ShowCloseIcon="true"
+                    CloseIconClicked="() => _validationError = null">
+                @_validationError
+            </MudAlert>
+        }
+
+        @if (_saved)
+        {
+            <MudAlert Severity="Severity.Success" ShowCloseIcon="true"
+                    CloseIconClicked="() => _saved = false">
+                Settings saved.
+            </MudAlert>
+        }
     </div>
 </div>
 
 @code {
     private string? _validationError;
     private bool _saved;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("scrollIndicator.init");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("scrollIndicator.dispose");
+    }
 
     // Available hotkey keys
     private static readonly string[] _availableKeys = new[]
@@ -336,6 +354,7 @@
 
     // Dependency update state
     private bool _depChecking;
+    private bool _depChecked;
     private bool _depUpdating;
     private double _depProgress;
     private string? _depError;
@@ -358,6 +377,7 @@
             HotkeyService.Register();
         }
 
+        SettingsService.NotifyDarkModeChanged();
         _saved = true;
     }
 
@@ -448,6 +468,7 @@
     private async Task CheckDependencyVersions()
     {
         _depChecking = true;
+        _depChecked = false;
         _depError = null;
         _latestYtDlp = null;
         _latestFfmpeg = null;
@@ -461,8 +482,20 @@
         var ytResult = await ytTask;
         var ffResult = await ffTask;
 
-        if (ytResult.IsSuccess) _latestYtDlp = ytResult.Value;
-        if (ffResult.IsSuccess) _latestFfmpeg = ffResult.Value;
+        // Only show "Latest" if it's actually different from installed
+        if (ytResult.IsSuccess && ytResult.Value is not null)
+        {
+            var installed = SettingsService.Updates.YtDlpLocalVersion;
+            if (!string.Equals(installed, ytResult.Value, StringComparison.OrdinalIgnoreCase))
+                _latestYtDlp = ytResult.Value;
+        }
+
+        if (ffResult.IsSuccess && ffResult.Value is not null)
+        {
+            var installed = SettingsService.Updates.FfmpegLocalVersion;
+            if (!string.Equals(installed, ffResult.Value, StringComparison.OrdinalIgnoreCase))
+                _latestFfmpeg = ffResult.Value;
+        }
 
         if (ytResult.IsFailure && ffResult.IsFailure)
             _depError = $"yt-dlp: {ytResult.Error} | FFmpeg: {ffResult.Error}";
@@ -472,6 +505,7 @@
             _depError = $"FFmpeg check failed: {ffResult.Error}";
 
         _depChecking = false;
+        _depChecked = true;
         StateHasChanged();
     }
 

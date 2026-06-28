@@ -168,6 +168,7 @@ public sealed partial class YtDlpService : IYtDlpService
         var args = BuildDownloadArgs(url, formatString, outputTemplate, streamKind, embedThumbnail: streamKind == StreamKind.Audio);
 
         string? downloadedFile = null;
+        bool isDownloading = false;
         var request = new ProcessRequest
         {
             Executable = YtDlpPath,
@@ -175,7 +176,7 @@ public sealed partial class YtDlpService : IYtDlpService
             OnOutputLine = line =>
             {
                 output?.Report(line);
-                ParseProgressLine(line, progress);
+                ParseProgressLine(line, progress, ref isDownloading);
                 var filePath = ExtractFilePath(line);
                 if (filePath is not null)
                     downloadedFile = filePath;
@@ -219,6 +220,7 @@ public sealed partial class YtDlpService : IYtDlpService
         var args = BuildDownloadArgs(url, formatId, outputTemplate, streamKind);
 
         string? downloadedFile = null;
+        bool isDownloading = false;
         var request = new ProcessRequest
         {
             Executable = YtDlpPath,
@@ -226,7 +228,7 @@ public sealed partial class YtDlpService : IYtDlpService
             OnOutputLine = line =>
             {
                 output?.Report(line);
-                ParseProgressLine(line, progress);
+                ParseProgressLine(line, progress, ref isDownloading);
                 var filePath = ExtractFilePath(line);
                 if (filePath is not null)
                     downloadedFile = filePath;
@@ -331,32 +333,49 @@ public sealed partial class YtDlpService : IYtDlpService
 
     #region Output Parsing
 
-    private static void ParseProgressLine(string line, IProgress<DownloadProgress>? progress)
+    private static void ParseProgressLine(string line, IProgress<DownloadProgress>? progress, ref bool isDownloading)
     {
         if (progress is null) return;
 
-        // yt-dlp progress format: [download]  45.2% of ~50.00MiB at 5.00MiB/s ETA 00:05
+        // Match download progress: [download]  45.2% of ~50.00MiB at 5.00MiB/s ETA 00:05
         var match = ProgressRegex().Match(line);
         if (match.Success)
         {
-            if (double.TryParse(match.Groups["pct"].Value, out var pct))
+            if (match.Groups["percent"].Success && match.Groups["percent"].Length > 0)
             {
-                progress.Report(new DownloadProgress
+                if (double.TryParse(match.Groups["percent"].Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var pct))
                 {
-                    State = DownloadState.Downloading,
-                    Progress = pct / 100.0,
-                    Speed = match.Groups["speed"].Success ? match.Groups["speed"].Value : null,
-                    Eta = match.Groups["eta"].Success ? match.Groups["eta"].Value : null
-                });
+                    progress.Report(new DownloadProgress
+                    {
+                        State = DownloadState.Downloading,
+                        Progress = pct / 100.0,
+                        Speed = match.Groups["speed"].Success ? match.Groups["speed"].Value : null,
+                        Eta = match.Groups["eta"].Success ? match.Groups["eta"].Value : null
+                    });
+                }
             }
+            else
+            {
+                // [download] line matched but no percentage yet
+                progress.Report(new DownloadProgress { State = DownloadState.Downloading });
+            }
+            isDownloading = true;
         }
-        else if (line.Contains("[Merger]") || line.Contains("[ExtractAudio]") || line.Contains("[ffmpeg]"))
+        else if (PlaylistIndexRegex().Match(line).Success)
         {
+            // Playlist item transition — reset downloading state
+            isDownloading = false;
+        }
+        else if (isDownloading && PostProcessRegex().Match(line).Success)
+        {
+            // Post-processing started after download completed
             progress.Report(new DownloadProgress
             {
                 State = DownloadState.PostProcessing,
                 Progress = 1.0
             });
+            isDownloading = false;
         }
     }
 
@@ -504,8 +523,14 @@ public sealed partial class YtDlpService : IYtDlpService
 
     #region Regex
 
-    [GeneratedRegex(@"\[download\]\s+(?<pct>[\d.]+)%.*?(?:at\s+(?<speed>\S+))?.*?(?:ETA\s+(?<eta>\S+))?")]
+    [GeneratedRegex(@"\[download\]\s+(?:(?<percent>[\d\.]+)%(?:\s+of\s+\~?\s*(?<total>[\d\.\w]+))?\s+at\s+(?:(?<speed>[\d\.\w]+\/s)|[\w\s]+)\s+ETA\s(?<eta>[\d\:]+))?")]
     private static partial Regex ProgressRegex();
+
+    [GeneratedRegex(@"Downloading video (\d+) of (\d+)")]
+    private static partial Regex PlaylistIndexRegex();
+
+    [GeneratedRegex(@"\[(\w+)\]\s+")]
+    private static partial Regex PostProcessRegex();
 
     [GeneratedRegex(@"\[download\] Destination:\s*(?<path>.+)")]
     private static partial Regex DestinationRegex();

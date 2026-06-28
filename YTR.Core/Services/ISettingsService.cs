@@ -22,4 +22,14 @@ public interface ISettingsService
     /// Validates current settings. Returns null if valid, or an error message.
     /// </summary>
     string? Validate();
+
+    /// <summary>
+    /// Raised when the dark mode setting changes so other components (e.g. MainLayout) can re-render.
+    /// </summary>
+    event Action? DarkModeChanged;
+
+    /// <summary>
+    /// Call this to notify subscribers that dark mode was toggled.
+    /// </summary>
+    void NotifyDarkModeChanged();
 }

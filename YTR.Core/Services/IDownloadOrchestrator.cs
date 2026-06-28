@@ -56,6 +56,8 @@ public sealed record DownloadRequest
     public AudioFormat? ConvertAudio { get; init; }
     public bool EmbedThumbnail { get; init; }
     public string? PlaylistFolder { get; init; }
+    public string? Title { get; init; }
+    public TimeSpan? MediaDuration { get; init; }
 }
 
 /// <summary>

@@ -118,6 +118,7 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         VideoFormat videoFormat,
         AudioFormat audioFormat,
         string outputPath,
+        TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
@@ -191,7 +192,7 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         var vf = filterArgs.Count > 0 ? $"-vf \"{string.Join(",", filterArgs)}\"" : "";
         var allArgs = $"-y {string.Join(" ", inputArgs)} {vf} {string.Join(" ", codecArgs)} \"{outputPath}\"";
 
-        return await RunFfmpegAsync(allArgs, duration, progress, ct, outputPath);
+        return await RunFfmpegAsync(allArgs, totalDuration ?? duration, progress, ct, outputPath);
     }
 
     #region Helpers
@@ -203,14 +204,21 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         CancellationToken ct,
         string outputPath)
     {
+        // Add -progress pipe:1 to get progress output on stdout with proper newlines
+        // Format: key=value pairs including out_time=HH:MM:SS.ffffff
+        var fullArgs = progress is not null && totalDuration.HasValue
+            ? $"-progress pipe:1 {args}"
+            : args;
+
         var request = new Models.ProcessRequest
         {
             Executable = FfmpegPath,
-            Arguments = args,
+            Arguments = fullArgs,
             OnOutputLine = line =>
             {
                 if (progress is null || !totalDuration.HasValue) return;
-                var timeMatch = FfmpegTimeRegex().Match(line);
+                // -progress pipe:1 outputs: out_time=00:00:04.000000
+                var timeMatch = FfmpegProgressTimeRegex().Match(line);
                 if (timeMatch.Success && TimeSpan.TryParse(timeMatch.Groups["time"].Value, out var current))
                 {
                     var pct = current.TotalSeconds / totalDuration.Value.TotalSeconds;
@@ -275,6 +283,9 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
 
     [GeneratedRegex(@"time=(?<time>[\d:.]+)")]
     private static partial Regex FfmpegTimeRegex();
+
+    [GeneratedRegex(@"^out_time=(?<time>[\d:.]+)")]
+    private static partial Regex FfmpegProgressTimeRegex();
 
     #endregion
 }
