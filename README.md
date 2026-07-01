@@ -3,7 +3,17 @@
 A fast, feature-rich desktop app for downloading video and audio from popular platforms. Paste a link, pick your format, and download — it's that simple.
 
 ![Windows](https://img.shields.io/badge/platform-Windows-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+
+---
+
+## Privacy & Transparency
+
+- No ads, ever
+- No in-app purchases
+- No data collection or tracking
+- No background network usage — the app only connects to the internet when you initiate a download
+- Update checks are manual — triggered only when you click "Check for Updates" in Settings
 
 ---
 
@@ -270,7 +280,7 @@ Powered by:
 
 ## License
 
-This project is open source. See the [GitHub repository](https://github.com/adanvdo/YTR-MAUI) for license details.
+This project is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html). You are free to use, modify, and distribute this software, provided that any derivative work is also released under the same license. See the [LICENSE](LICENSE) file for full terms.
 
 ## Contact
 
