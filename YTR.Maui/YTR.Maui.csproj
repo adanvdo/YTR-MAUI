@@ -26,9 +26,18 @@
         <!-- App Identifier -->
         <ApplicationId>com.jamgalactic.ytr</ApplicationId>
 
-        <!-- Versions -->
-        <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-        <ApplicationVersion>1</ApplicationVersion>
+        <!-- Versions (sourced from Directory.Build.props) -->
+        <ApplicationDisplayVersion>$(YtrVersion)</ApplicationDisplayVersion>
+
+        <!-- Windows: use the Windows build number -->
+        <ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrWindowsBuild)</ApplicationVersion>
+
+        <!-- Android: use the Android version code (must increment per Play Store upload) -->
+        <ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">$(YtrAndroidVersionCode)</ApplicationVersion>
+
+        <!-- Assembly version includes full 4-segment version for Windows -->
+        <Version Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrVersion).$(YtrWindowsBuild)</Version>
+        <Version Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">$(YtrVersion).$(YtrAndroidVersionCode)</Version>
 
         <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
         <WindowsPackageType>None</WindowsPackageType>

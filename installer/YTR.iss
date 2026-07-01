@@ -2,6 +2,7 @@
 ; Requires Inno Setup 6.x — https://jrsoftware.org/isinfo.php
 
 #define MyAppName "YTR"
+; Keep in sync with YtrVersion in Directory.Build.props
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "JAMGALACTIC"
 #define MyAppURL "https://jamgalactic.com"
