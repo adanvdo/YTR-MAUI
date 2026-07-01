@@ -1,0 +1,269 @@
+@inject IJSRuntime JS
+
+<div style="display:flex;flex-direction:column;gap:2px;position:relative;@(Disabled ? "opacity:0.4;pointer-events:none;" : "")">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label style="font-size:0.75rem;color:var(--mud-palette-text-secondary);margin-bottom:2px;">@Label</label>
+    }
+    <div @ref="_containerRef" style="display:flex;align-items:center;border:1px solid var(--mud-palette-lines-default);border-radius:var(--mud-default-borderradius);background:var(--mud-palette-surface);padding:4px 8px;height:36px;">
+        <input id="@($"{_id}_h")" name="@($"{_id}_h")" type="text" inputmode="numeric" maxlength="2"
+               value="@GetDisplayValue(0)" disabled="@Disabled"
+               @onfocus="() => OnFocus(0)"
+               @onblur="() => OnBlur(0)"
+               @oninput="e => OnInput(0, e)"
+               @onkeydown="e => OnKeyDown(0, e)"
+               @ref="_inputs[0]"
+               style="width:20px;min-width:20px;max-width:20px;border:none;outline:none;background:transparent;font-family:monospace;font-size:0.85rem;text-align:center;padding:0;margin:0;color:inherit;box-shadow:none;-webkit-appearance:none;appearance:none;" /><span style="font-size:0.7rem;color:var(--mud-palette-text-secondary);margin-right:6px;user-select:none;">h</span><input id="@($"{_id}_m")" name="@($"{_id}_m")" type="text" inputmode="numeric" maxlength="2"
+               value="@GetDisplayValue(1)" disabled="@Disabled"
+               @onfocus="() => OnFocus(1)"
+               @onblur="() => OnBlur(1)"
+               @oninput="e => OnInput(1, e)"
+               @onkeydown="e => OnKeyDown(1, e)"
+               @ref="_inputs[1]"
+               style="width:20px;min-width:20px;max-width:20px;border:none;outline:none;background:transparent;font-family:monospace;font-size:0.85rem;text-align:center;padding:0;margin:0;color:inherit;box-shadow:none;-webkit-appearance:none;appearance:none;" /><span style="font-size:0.7rem;color:var(--mud-palette-text-secondary);margin-right:6px;user-select:none;">m</span><input id="@($"{_id}_s")" name="@($"{_id}_s")" type="text" inputmode="numeric" maxlength="2"
+               value="@GetDisplayValue(2)" disabled="@Disabled"
+               @onfocus="() => OnFocus(2)"
+               @onblur="() => OnBlur(2)"
+               @oninput="e => OnInput(2, e)"
+               @onkeydown="e => OnKeyDown(2, e)"
+               @ref="_inputs[2]"
+               style="width:20px;min-width:20px;max-width:20px;border:none;outline:none;background:transparent;font-family:monospace;font-size:0.85rem;text-align:center;padding:0;margin:0;color:inherit;box-shadow:none;-webkit-appearance:none;appearance:none;" /><span style="font-size:0.7rem;color:var(--mud-palette-text-secondary);user-select:none;">s</span>
+
+        <button type="button" disabled="@Disabled" @onclick="TogglePopover"
+                style="display:flex;align-items:center;justify-content:center;border:none;background:transparent;cursor:pointer;padding:2px;margin-left:auto;border-radius:50%;color:var(--mud-palette-text-secondary);">
+            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+        </button>
+    </div>
+
+    @if (_popoverOpen)
+    {
+        <div style="position:fixed;z-index:9999;padding:12px;background:var(--mud-palette-surface);border:1px solid var(--mud-palette-lines-default);border-radius:var(--mud-default-borderradius);box-shadow:0 5px 15px rgba(0,0,0,0.3);left:@(_popLeft)px;top:@(_popTop)px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:48px;user-select:none;" @onwheel="e => OnWheel(0, e)" @onwheel:preventDefault>
+                    <button type="button" style="display:flex;align-items:center;justify-content:center;border:none;background:var(--mud-palette-action-default-hover);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mud-palette-text-primary);" @onclick="() => Increment(0)">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small" />
+                    </button>
+                    <span style="font-family:monospace;font-size:1.2rem;font-weight:500;color:var(--mud-palette-text-primary);min-width:32px;text-align:center;">@_values[0].ToString("D2")</span>
+                    <span style="font-size:0.65rem;color:var(--mud-palette-text-secondary);text-transform:uppercase;">hr</span>
+                    <button type="button" style="display:flex;align-items:center;justify-content:center;border:none;background:var(--mud-palette-action-default-hover);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mud-palette-text-primary);" @onclick="() => Decrement(0)">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" />
+                    </button>
+                </div>
+                <span style="font-size:1.2rem;color:var(--mud-palette-text-secondary);margin-top:-16px;">:</span>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:48px;user-select:none;" @onwheel="e => OnWheel(1, e)" @onwheel:preventDefault>
+                    <button type="button" style="display:flex;align-items:center;justify-content:center;border:none;background:var(--mud-palette-action-default-hover);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mud-palette-text-primary);" @onclick="() => Increment(1)">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small" />
+                    </button>
+                    <span style="font-family:monospace;font-size:1.2rem;font-weight:500;color:var(--mud-palette-text-primary);min-width:32px;text-align:center;">@_values[1].ToString("D2")</span>
+                    <span style="font-size:0.65rem;color:var(--mud-palette-text-secondary);text-transform:uppercase;">min</span>
+                    <button type="button" style="display:flex;align-items:center;justify-content:center;border:none;background:var(--mud-palette-action-default-hover);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mud-palette-text-primary);" @onclick="() => Decrement(1)">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" />
+                    </button>
+                </div>
+                <span style="font-size:1.2rem;color:var(--mud-palette-text-secondary);margin-top:-16px;">:</span>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:48px;user-select:none;" @onwheel="e => OnWheel(2, e)" @onwheel:preventDefault>
+                    <button type="button" style="display:flex;align-items:center;justify-content:center;border:none;background:var(--mud-palette-action-default-hover);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mud-palette-text-primary);" @onclick="() => Increment(2)">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small" />
+                    </button>
+                    <span style="font-family:monospace;font-size:1.2rem;font-weight:500;color:var(--mud-palette-text-primary);min-width:32px;text-align:center;">@_values[2].ToString("D2")</span>
+                    <span style="font-size:0.65rem;color:var(--mud-palette-text-secondary);text-transform:uppercase;">sec</span>
+                    <button type="button" style="display:flex;align-items:center;justify-content:center;border:none;background:var(--mud-palette-action-default-hover);border-radius:50%;width:28px;height:28px;cursor:pointer;color:var(--mud-palette-text-primary);" @onclick="() => Decrement(2)">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" />
+                    </button>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--mud-palette-lines-default);">
+                <MudButton Size="Size.Small" OnClick="ClearValue" Color="Color.Secondary">Clear</MudButton>
+                <MudButton Size="Size.Small" OnClick="ClosePopover" Color="Color.Primary">Done</MudButton>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _id = $"tsp_{Guid.NewGuid():N}"[..12];
+    private int[] _values = [0, 0, 0];
+    private string?[] _editBuffer = [null, null, null]; // null = not editing, string = raw typed chars
+    private int _focusedPart = -1;
+    private bool _popoverOpen;
+    private int _popLeft;
+    private int _popTop;
+
+    private ElementReference[] _inputs = new ElementReference[3];
+    private ElementReference _containerRef;
+
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public TimeSpan? Value { get; set; }
+    [Parameter] public EventCallback<TimeSpan?> ValueChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Value.HasValue)
+        {
+            var ts = Value.Value;
+            _values[0] = (int)ts.TotalHours;
+            _values[1] = ts.Minutes;
+            _values[2] = ts.Seconds;
+        }
+        else
+        {
+            _values[0] = 0;
+            _values[1] = 0;
+            _values[2] = 0;
+        }
+    }
+
+    private string GetDisplayValue(int part)
+    {
+        // While editing, show the raw buffer so user can type freely
+        if (_focusedPart == part && _editBuffer[part] is not null)
+            return _editBuffer[part]!;
+        return _values[part].ToString("D2");
+    }
+
+    private async Task OnFocus(int part)
+    {
+        _focusedPart = part;
+        _editBuffer[part] = null; // Reset buffer — will show "00" padded until they type
+        try
+        {
+            await Task.Yield(); // Let the DOM update the value first
+            await JS.InvokeVoidAsync("eval", "document.activeElement?.select()");
+        }
+        catch { }
+    }
+
+    private void OnBlur(int part)
+    {
+        // Commit whatever is in the buffer
+        if (_editBuffer[part] is not null)
+        {
+            var digits = _editBuffer[part]!;
+            var max = part == 0 ? 99 : 59;
+            if (int.TryParse(digits, out var num))
+                _values[part] = Math.Min(num, max);
+            else
+                _values[part] = 0;
+            _editBuffer[part] = null;
+        }
+        _focusedPart = -1;
+    }
+
+    private async Task OnInput(int part, ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? "";
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+
+        // Store raw digits in the edit buffer (don't pad yet)
+        if (digits.Length > 2)
+            digits = digits[^2..];
+
+        _editBuffer[part] = digits;
+
+        // Update the actual value
+        var max = part == 0 ? 99 : 59;
+        if (int.TryParse(digits, out var num))
+            _values[part] = Math.Min(num, max);
+
+        await NotifyChanged();
+
+        // Auto-advance after 2 digits
+        if (digits.Length >= 2 && part < 2)
+        {
+            _editBuffer[part] = null; // Commit
+            _focusedPart = part + 1;
+            _editBuffer[part + 1] = null;
+            await _inputs[part + 1].FocusAsync();
+        }
+    }
+
+    private async Task OnKeyDown(int part, KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowUp")
+        {
+            Increment(part);
+            _editBuffer[part] = null;
+            await NotifyChanged();
+        }
+        else if (e.Key == "ArrowDown")
+        {
+            Decrement(part);
+            _editBuffer[part] = null;
+            await NotifyChanged();
+        }
+        else if (e.Key == "ArrowRight" && part < 2)
+        {
+            _editBuffer[part] = null;
+            await _inputs[part + 1].FocusAsync();
+        }
+        else if (e.Key == "ArrowLeft" && part > 0)
+        {
+            _editBuffer[part] = null;
+            await _inputs[part - 1].FocusAsync();
+        }
+    }
+
+    private async Task OnWheel(int part, WheelEventArgs e)
+    {
+        if (e.DeltaY < 0)
+            Increment(part);
+        else if (e.DeltaY > 0)
+            Decrement(part);
+
+        await NotifyChanged();
+    }
+
+    private void Increment(int part)
+    {
+        var max = part == 0 ? 99 : 59;
+        _values[part] = _values[part] >= max ? 0 : _values[part] + 1;
+    }
+
+    private void Decrement(int part)
+    {
+        var max = part == 0 ? 99 : 59;
+        _values[part] = _values[part] <= 0 ? max : _values[part] - 1;
+    }
+
+    private async Task TogglePopover()
+    {
+        if (!_popoverOpen)
+        {
+            // Get the container position to place the dropdown in fixed space
+            try
+            {
+                var rect = await JS.InvokeAsync<BoundingRect>("eval",
+                    $"(function(){{ var el = document.getElementById('{_id}_h').closest('[style*=\"height:36px\"]'); var r = el.getBoundingClientRect(); return {{ left: r.left, top: r.bottom }}; }})()");
+                _popLeft = (int)rect.Left;
+                _popTop = (int)rect.Top + 4;
+            }
+            catch
+            {
+                _popLeft = 0;
+                _popTop = 40;
+            }
+        }
+        _popoverOpen = !_popoverOpen;
+    }
+
+    private void ClosePopover() => _popoverOpen = false;
+
+    private async Task ClearValue()
+    {
+        _values[0] = 0;
+        _values[1] = 0;
+        _values[2] = 0;
+        await NotifyChanged();
+    }
+
+    private async Task NotifyChanged()
+    {
+        TimeSpan? newValue = (_values[0] == 0 && _values[1] == 0 && _values[2] == 0)
+            ? null
+            : new TimeSpan(_values[0], _values[1], _values[2]);
+        await ValueChanged.InvokeAsync(newValue);
+    }
+
+    private record BoundingRect(double Left, double Top);
+}

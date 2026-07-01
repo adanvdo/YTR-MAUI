@@ -1,72 +1,277 @@
-# YTR — Media Downloader (MAUI Blazor Hybrid)
+# YTR — Media Downloader
 
-Cross-platform media downloader rebuilt from the ground up with .NET 10, MAUI Blazor Hybrid, and MudBlazor.
+A fast, feature-rich desktop app for downloading video and audio from popular platforms. Paste a link, pick your format, and download — it's that simple.
 
-## Solution Structure
+![Windows](https://img.shields.io/badge/platform-Windows-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-```
-YTR.slnx
-├── YTR.Core/          .NET 10 class library — domain models, service interfaces, EF Core
-├── YTR.Web/           Razor Class Library — Blazor UI components (MudBlazor)
-└── YTR.Maui/          .NET MAUI host — Windows + Android
-```
+---
 
-## Prerequisites
+## Features at a Glance
 
-- .NET 10 SDK with MAUI workload (`dotnet workload install maui`)
-- Windows 10 SDK (for Windows target)
-- Android SDK (for Android target)
+- Download video and audio from YouTube, Reddit, Twitter/X, Vimeo, Instagram, Twitch, and TikTok
+- Full playlist support — download all items or pick specific ones
+- Choose exact quality: from 480p SD to 4K UHD
+- Extract segments (clips) from any video by specifying start/end times
+- Visual crop tool to trim video borders
+- Convert to your preferred format on the fly
+- Dark and light theme
+- Global hotkey for quick downloads without switching windows
+- Built-in auto-updater for the app and its download tools
+- Download history with search, re-download, and bulk management
 
-## Build
+---
 
-```bash
-# Core + Web libraries
-dotnet build YTR.Core/YTR.Core.csproj
-dotnet build YTR.Web/YTR.Web.csproj
+## Installation
 
-# MAUI app (Windows)
-dotnet build YTR.Maui/YTR.Maui.csproj -f net10.0-windows10.0.19041.0
+1. Download the latest installer from the [Releases](https://github.com/adanvdo/YTR-MAUI/releases) page.
+2. Run `YTR-Setup-x.x.x.exe` and follow the prompts.
+3. Launch YTR from the Start Menu or desktop shortcut.
 
-# MAUI app (Android)
-dotnet build YTR.Maui/YTR.Maui.csproj -f net10.0-android
-```
+All required tools (yt-dlp, FFmpeg) are bundled with the installer — no extra setup needed.
 
-## Run (Windows)
+### Optional install choices
 
-```bash
-dotnet run --project YTR.Maui/YTR.Maui.csproj -f net10.0-windows10.0.19041.0
-```
+- **Desktop shortcut** — create a shortcut on your desktop (unchecked by default)
+- **Start with Windows** — launch YTR automatically on login (unchecked by default)
 
-## Architecture
+---
 
-- **Clean Architecture** — Core library has zero UI dependencies
-- **Dependency Injection** — All services registered in `MauiProgram.cs`
-- **Result Pattern** — Expected failures return `Result<T>` instead of throwing
-- **EF Core + SQLite** — Download history with proper async queries
-- **IOptions Pattern** — Focused settings classes (`DownloadOptions`, `RestrictionOptions`, etc.)
-- **Platform Abstraction** — `IPlatformService`, `IProcessRunner` for cross-platform ops
+## Getting Started
 
-## Key Services
+1. Open YTR.
+2. Paste a video or playlist URL into the input bar.
+3. Click **List Formats** to see all available quality options, or skip straight to downloading.
+4. Choose a download action:
+   - **Download Best** — grabs the highest quality video + audio combination
+   - **Download Audio** — extracts audio only
+   - **Download Selected Format** — downloads the exact stream(s) you selected from the format list
+5. Your file is saved to the configured download folder, which opens automatically when done.
 
-| Interface | Responsibility |
-|-----------|---------------|
-| `IUrlAnalyzer` | URL detection and normalization |
-| `IYtDlpService` | yt-dlp process invocation |
-| `IMediaProcessor` | FFmpeg operations |
-| `IDownloadOrchestrator` | Full download workflow coordination |
-| `IHistoryService` | Download history CRUD |
-| `ISettingsService` | Settings persistence |
-| `IAppUpdateService` | App update management |
-| `IDependencyUpdateService` | yt-dlp/FFmpeg updates |
+---
 
-## Migration Status
+## Supported Platforms
 
-- [x] Phase 1: Core library foundation (models, enums, interfaces, EF Core, UrlAnalyzer, HistoryService)
-- [x] Phase 2: Blazor UI skeleton (Home, History, Settings, Updates pages + shared components)
-- [x] Phase 3: MAUI host wired up (DI, MudBlazor, routing)
-- [x] Phase 4: Download engine (YtDlpService, FfmpegMediaProcessor, DownloadOrchestrator, ProcessRunner, SettingsService)
-- [x] Phase 5: Data migration service (legacy settings.json + history.json → new format)
-- [x] Phase 6: Platform features (hotkey, tray, single-instance, notifications, quick-download, window sizing)
-- [ ] Tray icon visual (needs H.NotifyIcon.WinUI or Shell_NotifyIcon wrapper)
-- [ ] Android share intent receiver
-- [ ] End-to-end integration testing
+| Platform | Video | Audio | Playlists |
+|----------|:-----:|:-----:|:---------:|
+| YouTube  | ✓     | ✓     | ✓         |
+| Reddit   | ✓     | ✓     | —         |
+| Twitter/X| ✓     | ✓     | —         |
+| Vimeo    | ✓     | ✓     | —         |
+| Instagram| ✓     | ✓     | —         |
+| Twitch   | ✓     | ✓     | —         |
+| TikTok   | ✓     | ✓     | —         |
+
+---
+
+## Download Options
+
+Each download can be fine-tuned with the options panel on the right side of the app.
+
+### Segment (Clip Extraction)
+
+Extract a specific portion of a video instead of downloading the whole thing.
+
+- **Start** — the timestamp where the clip begins
+- **End Time / Duration** — where it ends (you choose the mode in Settings → Appearance)
+
+### Crop
+
+Trim pixel borders from the video frame (top, bottom, left, right). Use the **Visual Crop Tool** to draw the crop area on a thumbnail preview.
+
+### Convert
+
+Convert the downloaded media to a different format:
+
+| Video formats | Audio formats |
+|---------------|---------------|
+| MP4           | MP3           |
+| MKV           | AAC           |
+| WebM          | FLAC          |
+| GIF           | Opus          |
+
+If you always want the same output format, enable **Always convert to preferred format** in Settings → Advanced.
+
+### Limits
+
+Cap downloads by resolution or file size:
+
+- **Max Resolution** — 480p, 720p, 1080p, 4K, or Any (no limit)
+- **Max File Size** — set a size cap in MB (0 = unlimited)
+
+These can also be enforced globally from Settings → Advanced → Restrictions.
+
+---
+
+## Format Selection Modes
+
+YTR offers two ways to browse available formats:
+
+- **Preset** — shows pre-built video + audio combinations for quick selection
+- **Custom** — lets you independently pick a video stream and an audio stream for full control
+
+Switch between modes in Settings → Appearance → Format Mode.
+
+---
+
+## Playlist Downloads
+
+When you paste a playlist URL:
+
+1. YTR displays a grid of all playlist items with thumbnails.
+2. Select or deselect individual items.
+3. Choose **Download All** (video+audio) or **Download All Audio**.
+4. A folder is automatically created for the playlist.
+
+Progress is tracked per-item so you can see how far along the batch is.
+
+---
+
+## History
+
+The **History** page logs every download with:
+
+- Platform, title, format, and date
+- File status indicator (shows if the file still exists on disk)
+- **Open location** — jump to the file in Explorer
+- **Re-download** — re-run the same download with original settings
+
+Bulk actions let you clear logs or delete files + logs, filtered by video or audio.
+
+History retention is configurable (default: 30 days).
+
+---
+
+## Settings
+
+Access settings from the gear icon. Changes take effect after clicking **Save**.
+
+### General
+
+| Setting | Description |
+|---------|-------------|
+| Video Download Path | Where video files are saved |
+| Audio Download Path | Where audio files are saved |
+| Use video title as filename | Names the file after the media title instead of its ID |
+| Create folder for playlists | Groups playlist items in a dedicated folder |
+| Auto-open download location | Opens the folder in Explorer when a download finishes |
+
+### Appearance
+
+| Setting | Description |
+|---------|-------------|
+| Dark mode | Toggle between dark and light theme |
+| Format Mode | Preset (quick pairs) or Custom (pick individual streams) |
+| Segment Mode | Choose whether the clip end-point is specified as an end time or a duration |
+
+### Advanced
+
+**Processing**
+
+| Setting | Description |
+|---------|-------------|
+| Always convert to preferred format | Automatically converts every download to your preferred format |
+| Preferred Video Format | Target video format (MP4, MKV, WebM, etc.) |
+| Preferred Audio Format | Target audio format (MP3, AAC, FLAC, Opus, etc.) |
+| Fetch missing metadata | Retrieves extra info when listing formats |
+| Verbose output | Shows detailed processing logs in the status bar |
+
+**Restrictions**
+
+| Setting | Description |
+|---------|-------------|
+| Enforce restrictions | Applies max resolution and file size limits to every download |
+| Max Resolution | Global resolution cap |
+| Max File Size (MB) | Global file size cap (0 = unlimited) |
+
+**Hotkeys**
+
+| Setting | Description |
+|---------|-------------|
+| Enable global hotkey | Triggers a quick download from the clipboard URL without opening the window |
+| Modifiers | Ctrl, Shift, Alt, or combinations |
+| Key | Any letter, number, or function key |
+
+Default hotkey: `Ctrl+Shift+D`
+
+### About
+
+- Current app version
+- Check for app updates (Stable, Beta, or Alpha channels)
+- Download and install updates in-app
+- Check and update bundled tools (yt-dlp, FFmpeg)
+
+---
+
+## Global Hotkey (Quick Download)
+
+When enabled, pressing your configured hotkey (default `Ctrl+Shift+D`) will:
+
+1. Read the URL currently on your clipboard
+2. Download it using your default settings (best quality, preferred format)
+3. Save to your configured download folder
+
+No need to open the app window — useful for rapid saving while browsing.
+
+---
+
+## Updating
+
+### App updates
+
+Go to Settings → About and click **Check for Updates**. If a new version is available, click **Download** and then **Install & Restart**. You can choose between Stable, Beta, and Alpha release channels.
+
+### Tool updates (yt-dlp & FFmpeg)
+
+YTR bundles yt-dlp and FFmpeg. To keep them current, go to Settings → About → Dependencies, click **Check Versions**, and update individually if newer versions are available.
+
+---
+
+## System Requirements
+
+- Windows 10 (version 1903 or later), 64-bit
+- ~150 MB disk space (including bundled tools)
+- Internet connection for downloading media
+
+---
+
+## Troubleshooting
+
+**Download fails or no formats found**
+- The media URL may be private, geo-restricted, or require login.
+- Try updating yt-dlp in Settings → About → Dependencies.
+
+**Conversion fails**
+- Ensure FFmpeg is up to date via Settings → About → Dependencies.
+
+**Hotkey doesn't work**
+- Another application may have registered the same key combination. Try a different one in Settings → Advanced → Hotkeys.
+
+**App won't start after update**
+- Reinstall from the latest installer on the [Releases](https://github.com/adanvdo/YTR-MAUI/releases) page. Your settings and history are preserved.
+
+---
+
+## Uninstalling
+
+Use **Add or Remove Programs** in Windows Settings, or run the uninstaller from the Start Menu group. Your download history and settings in `%localappdata%\YTR` are kept unless you remove them manually.
+
+---
+
+## Credits
+
+Built by [JAMGALACTIC](https://jamgalactic.com)
+
+Powered by:
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — media extraction
+- [FFmpeg](https://ffmpeg.org/) — media processing and conversion
+
+---
+
+## License
+
+This project is open source. See the [GitHub repository](https://github.com/adanvdo/YTR-MAUI) for license details.
+
+## Contact
+
+Questions or feedback? Reach out at jesse@jamgalactic.com

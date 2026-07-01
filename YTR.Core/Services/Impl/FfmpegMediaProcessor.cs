@@ -6,20 +6,24 @@ namespace YTR.Core.Services.Impl;
 
 /// <summary>
 /// FFmpeg-based media processing: segment extraction, crop, convert, GIF, concatenation.
+/// Uses hardware acceleration when available (NVENC/QSV/AMF) and fast presets for software encoding.
 /// </summary>
 public sealed partial class FfmpegMediaProcessor : IMediaProcessor
 {
     private readonly IProcessRunner _processRunner;
     private readonly IPlatformService _platform;
+    private readonly IHardwareEncoderService _hwEncoder;
     private readonly ILogger<FfmpegMediaProcessor> _logger;
 
     public FfmpegMediaProcessor(
         IProcessRunner processRunner,
         IPlatformService platform,
+        IHardwareEncoderService hwEncoder,
         ILogger<FfmpegMediaProcessor> logger)
     {
         _processRunner = processRunner;
         _platform = platform;
+        _hwEncoder = hwEncoder;
         _logger = logger;
     }
 
@@ -33,7 +37,11 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
-        var args = $"-y -ss {FormatTime(start)} -i \"{inputPath}\" -t {FormatTime(duration)} -c copy \"{outputPath}\"";
+        // Segment extraction with stream copy. Use -avoid_negative_ts to fix timestamp issues
+        // when seeking to non-keyframe positions. For MP4 output, add -movflags +faststart.
+        var ext = Path.GetExtension(outputPath).TrimStart('.').ToLowerInvariant();
+        var movFlags = (ext is "mp4" or "m4a" or "m4v" or "mov") ? "-movflags +faststart" : "";
+        var args = $"-y -ss {FormatTime(start)} -i \"{inputPath}\" -t {FormatTime(duration)} -c copy -avoid_negative_ts make_zero {movFlags} \"{outputPath}\"";
         return await RunFfmpegAsync(args, duration, progress, ct, outputPath);
     }
 
@@ -41,14 +49,19 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         string inputPath,
         int x, int y, int width, int height,
         string outputPath,
+        TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
-        var targetFormat = Models.CodecMap.GetBestContainerForCodec(null); // Determine from extension
+        await _hwEncoder.InitializeAsync(ct);
+
         var ext = Path.GetExtension(outputPath).TrimStart('.');
-        var vCodec = Models.CodecMap.GetBestVideoCodec(ExtensionToVideoFormat(ext));
-        var args = $"-y -i \"{inputPath}\" -filter:v \"crop={width}:{height}:{x}:{y}\" -c:v {vCodec.Encoder} -c:a copy \"{outputPath}\"";
-        return await RunFfmpegAsync(args, null, progress, ct, outputPath);
+        var targetFormat = ExtensionToVideoFormat(ext);
+        var vEncoder = GetVideoEncoder(targetFormat);
+        var encoderArgs = GetEncoderArgs(targetFormat);
+
+        var args = $"-y -i \"{inputPath}\" -filter:v \"crop={width}:{height}:{x}:{y}\" -c:v {vEncoder} {encoderArgs} -c:a copy \"{outputPath}\"";
+        return await RunFfmpegAsync(args, totalDuration, progress, ct, outputPath);
     }
 
     public async Task<Result<string>> ConvertAsync(
@@ -56,12 +69,15 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         VideoFormat videoFormat,
         AudioFormat audioFormat,
         string outputPath,
+        TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
-        var codecArgs = BuildCodecArgsFromMap(videoFormat, audioFormat);
+        await _hwEncoder.InitializeAsync(ct);
+
+        var codecArgs = BuildCodecArgs(videoFormat, audioFormat);
         var args = $"-y -i \"{inputPath}\" {codecArgs} \"{outputPath}\"";
-        return await RunFfmpegAsync(args, null, progress, ct, outputPath);
+        return await RunFfmpegAsync(args, totalDuration, progress, ct, outputPath);
     }
 
     public async Task<Result<string>> ConvertToGifAsync(
@@ -122,11 +138,15 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
+        await _hwEncoder.InitializeAsync(ct);
+
         var inputArgs = new List<string>();
+        var mapArgs = new List<string>();
         var filterArgs = new List<string>();
         var codecArgs = new List<string>();
+        var outputArgs = new List<string>();
 
-        // Seek before input for fast seeking
+        // Seek before each input for fast seeking (same as original app)
         if (start.HasValue)
             inputArgs.Add($"-ss {FormatTime(start.Value)}");
 
@@ -139,63 +159,201 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
             if (start.HasValue)
                 inputArgs.Add($"-ss {FormatTime(start.Value)}");
             inputArgs.Add($"-i \"{audioUrl}\"");
+            // Explicit stream mapping (like original app: -map 0:0 -map 1:0)
+            mapArgs.Add("-map 0:0");
+            mapArgs.Add("-map 1:0");
         }
 
-        // Duration limit
+        // Duration limit — placed as output arg (after inputs), not input arg
         if (duration.HasValue)
-            inputArgs.Add($"-t {FormatTime(duration.Value)}");
+            outputArgs.Add($"-t {FormatTime(duration.Value)}");
 
         // Crop filter
         if (cropMargins is { Length: 4 })
         {
-            // Margins are [top, bottom, left, right] — need to probe for dimensions
-            // For stream processing, we pass the crop filter and let FFmpeg handle it
-            // The caller should have validated via CropHelper already
             var x = cropMargins[2]; // left
             var y = cropMargins[0]; // top
-            // We can't know exact width/height without probing the URL, so use iw/ih expressions
             filterArgs.Add($"crop=iw-{cropMargins[2]}-{cropMargins[3]}:ih-{cropMargins[0]}-{cropMargins[1]}:{x}:{y}");
         }
 
-        // Video codec
+        // Determine if we need explicit codec specification
+        bool needsReencode = cropMargins is { Length: 4 }
+            || videoFormat != VideoFormat.Unspecified
+            || audioFormat != AudioFormat.Unspecified;
+
         if (videoFormat == VideoFormat.Gif)
         {
-            // GIF conversion filter
             filterArgs.Clear();
             filterArgs.Add("fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
             codecArgs.Add("-loop 0");
         }
-        else if (videoFormat != VideoFormat.Unspecified)
+        else if (needsReencode)
         {
-            var vCodec = Models.CodecMap.GetBestVideoCodec(videoFormat);
-            codecArgs.Add($"-c:v {vCodec.Encoder}");
-            var aCodec = Models.CodecMap.GetBestAudioCodec(videoFormat);
-            if (aCodec is not null)
-                codecArgs.Add($"-c:a {aCodec.Encoder}");
-        }
-        else
-        {
-            codecArgs.Add("-c:v libx264");
-            codecArgs.Add("-c:a aac");
-        }
+            var targetFormat = videoFormat != VideoFormat.Unspecified ? videoFormat : VideoFormat.Mp4;
+            // Use software encoders for stream URLs — hardware encoders are unreliable with HTTP inputs
+            var vEncoder = targetFormat switch
+            {
+                VideoFormat.Mp4 or VideoFormat.Mkv or VideoFormat.Flv => "libx264",
+                VideoFormat.Webm => "libvpx-vp9",
+                VideoFormat.Ogg => "libtheora -qscale:v 3",
+                _ => "libx264"
+            };
+            var encoderExtraArgs = targetFormat switch
+            {
+                VideoFormat.Webm => "-deadline good -cpu-used 4 -b:v 0 -crf 30",
+                VideoFormat.Ogg => "",
+                _ => "-preset veryfast"
+            };
+            codecArgs.Add($"-c:v {vEncoder} {encoderExtraArgs}");
 
-        // Audio format override
-        if (audioFormat != AudioFormat.Unspecified && videoFormat != VideoFormat.Gif)
-        {
-            var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
-            // Remove any existing -c:a
-            codecArgs.RemoveAll(a => a.StartsWith("-c:a"));
-            codecArgs.Add($"-c:a {aCodec.Encoder}");
+            if (audioFormat != AudioFormat.Unspecified)
+            {
+                var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
+                codecArgs.Add($"-c:a {aCodec.Encoder}");
+            }
+            else
+            {
+                var aCodec = Models.CodecMap.GetBestAudioCodec(targetFormat);
+                if (aCodec is not null)
+                    codecArgs.Add($"-c:a {aCodec.Encoder}");
+            }
         }
+        // else: no codec args — let ffmpeg choose defaults for the output container
+        // This matches the original app behavior for segment-only downloads
 
         // Build final args
         var vf = filterArgs.Count > 0 ? $"-vf \"{string.Join(",", filterArgs)}\"" : "";
-        var allArgs = $"-y {string.Join(" ", inputArgs)} {vf} {string.Join(" ", codecArgs)} \"{outputPath}\"";
+        var map = mapArgs.Count > 0 ? string.Join(" ", mapArgs) : "";
+        var codec = codecArgs.Count > 0 ? string.Join(" ", codecArgs) : "";
+        var outOpts = outputArgs.Count > 0 ? string.Join(" ", outputArgs) : "";
+        var allArgs = $"-y {string.Join(" ", inputArgs)} {map} {outOpts} {vf} {codec} \"{outputPath}\"";
 
         return await RunFfmpegAsync(allArgs, totalDuration ?? duration, progress, ct, outputPath);
     }
 
     #region Helpers
+
+    /// <summary>
+    /// Single-pass post-processing: combines segment extraction, crop, and format conversion
+    /// into one ffmpeg command. Avoids intermediate files and redundant decode/encode cycles.
+    /// </summary>
+    public async Task<Result<string>> PostProcessSinglePassAsync(
+        string inputPath,
+        string outputPath,
+        TimeSpan? segmentStart,
+        TimeSpan? segmentDuration,
+        int[]? cropValues,
+        VideoFormat videoFormat,
+        AudioFormat audioFormat,
+        TimeSpan? totalDuration = null,
+        IProgress<double>? progress = null,
+        CancellationToken ct = default)
+    {
+        await _hwEncoder.InitializeAsync(ct);
+
+        var inputArgs = new List<string>();
+        var filterArgs = new List<string>();
+
+        // Input seeking (before -i for fast seek)
+        if (segmentStart.HasValue)
+            inputArgs.Add($"-ss {FormatTime(segmentStart.Value)}");
+
+        inputArgs.Add($"-i \"{inputPath}\"");
+
+        // Duration limit
+        if (segmentDuration.HasValue)
+            inputArgs.Add($"-t {FormatTime(segmentDuration.Value)}");
+
+        // Crop filter
+        if (cropValues is { Length: 4 } margins)
+        {
+            var x = margins[2]; // left
+            var y = margins[0]; // top
+            filterArgs.Add($"crop=iw-{margins[2]}-{margins[3]}:ih-{margins[0]}-{margins[1]}:{x}:{y}");
+        }
+
+        // Determine if we need video re-encoding
+        bool needsVideoReencode = cropValues is { Length: 4 }
+            || (videoFormat != VideoFormat.Unspecified && videoFormat != VideoFormat.Gif);
+
+        // Build codec args
+        var codecArgs = new List<string>();
+
+        if (videoFormat == VideoFormat.Gif)
+        {
+            // GIF mode — replace all filters with gif pipeline
+            filterArgs.Clear();
+            filterArgs.Add("fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
+            codecArgs.Add("-loop 0");
+        }
+        else if (needsVideoReencode)
+        {
+            var targetFormat = videoFormat != VideoFormat.Unspecified ? videoFormat : VideoFormat.Mp4;
+            var vEncoder = GetVideoEncoder(targetFormat);
+            var encoderArgs = GetEncoderArgs(targetFormat);
+            codecArgs.Add($"-c:v {vEncoder} {encoderArgs}");
+
+            if (audioFormat != AudioFormat.Unspecified)
+            {
+                var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
+                codecArgs.Add($"-c:a {aCodec.Encoder}");
+            }
+            else
+            {
+                codecArgs.Add("-c:a copy");
+            }
+        }
+        else if (audioFormat != AudioFormat.Unspecified)
+        {
+            // Audio-only conversion, video stream copy
+            codecArgs.Add("-c:v copy");
+            var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
+            codecArgs.Add($"-c:a {aCodec.Encoder}");
+        }
+        else
+        {
+            // Segment only — stream copy
+            codecArgs.Add("-c copy");
+            codecArgs.Add("-avoid_negative_ts make_zero");
+        }
+
+        var vf = filterArgs.Count > 0 ? $"-vf \"{string.Join(",", filterArgs)}\"" : "";
+
+        // For MP4 output, add faststart for better playback compatibility
+        var outputExt = Path.GetExtension(outputPath).TrimStart('.').ToLowerInvariant();
+        var movFlags = (outputExt is "mp4" or "m4a" or "m4v" or "mov") ? "-movflags +faststart" : "";
+
+        var args = $"-y {string.Join(" ", inputArgs)} {vf} {string.Join(" ", codecArgs)} {movFlags} \"{outputPath}\"";
+
+        // For progress, use segment duration if available, else total duration
+        var progressDuration = segmentDuration ?? totalDuration;
+
+        return await RunFfmpegAsync(args, progressDuration, progress, ct, outputPath);
+    }
+
+    /// <summary>
+    /// Gets the best video encoder for the given format, using hardware acceleration when available.
+    /// </summary>
+    private string GetVideoEncoder(VideoFormat format) => format switch
+    {
+        VideoFormat.Mp4 => _hwEncoder.H264Encoder,
+        VideoFormat.Mkv => _hwEncoder.H264Encoder,
+        VideoFormat.Webm => "libvpx-vp9", // No HW acceleration for VP9 encoding in most cases
+        VideoFormat.Flv => _hwEncoder.H264Encoder,
+        VideoFormat.Ogg => "libtheora -qscale:v 3",
+        _ => _hwEncoder.H264Encoder
+    };
+
+    /// <summary>
+    /// Gets extra encoder arguments (preset, quality, etc.) appropriate for the encoder type.
+    /// </summary>
+    private string GetEncoderArgs(VideoFormat format) => format switch
+    {
+        // VP9 and Theora don't use the hw encoder args
+        VideoFormat.Webm => "-deadline good -cpu-used 4 -b:v 0 -crf 30",
+        VideoFormat.Ogg => "",
+        _ => _hwEncoder.HwEncoderExtraArgs
+    };
 
     private async Task<Result<string>> RunFfmpegAsync(
         string args,
@@ -204,10 +362,10 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         CancellationToken ct,
         string outputPath)
     {
-        // Add -progress pipe:1 to get progress output on stdout with proper newlines
-        // Format: key=value pairs including out_time=HH:MM:SS.ffffff
+        // Use -progress - -nostats to get structured progress on stdout
+        // (-progress pipe:1 doesn't work reliably on Windows)
         var fullArgs = progress is not null && totalDuration.HasValue
-            ? $"-progress pipe:1 {args}"
+            ? args.Replace("-y ", "-y -progress - -nostats ")
             : args;
 
         var request = new Models.ProcessRequest
@@ -217,8 +375,19 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
             OnOutputLine = line =>
             {
                 if (progress is null || !totalDuration.HasValue) return;
-                // -progress pipe:1 outputs: out_time=00:00:04.000000
+                // -progress - outputs: out_time=00:00:04.000000 (or out_time=00:00:04.00)
                 var timeMatch = FfmpegProgressTimeRegex().Match(line);
+                if (timeMatch.Success && TimeSpan.TryParse(timeMatch.Groups["time"].Value, out var current))
+                {
+                    var pct = current.TotalSeconds / totalDuration.Value.TotalSeconds;
+                    progress.Report(Math.Clamp(pct, 0, 1));
+                }
+            },
+            OnErrorLine = line =>
+            {
+                if (progress is null || !totalDuration.HasValue) return;
+                // Fallback: parse stderr time= output (when -nostats is not used)
+                var timeMatch = FfmpegTimeRegex().Match(line);
                 if (timeMatch.Success && TimeSpan.TryParse(timeMatch.Groups["time"].Value, out var current))
                 {
                     var pct = current.TotalSeconds / totalDuration.Value.TotalSeconds;
@@ -232,7 +401,6 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         if (result.WasCancelled)
             return Result<string>.Failure("Processing cancelled.");
 
-        // FFmpeg writes progress to stderr, so check if output file exists
         if (File.Exists(outputPath))
         {
             progress?.Report(1.0);
@@ -242,16 +410,15 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         return Result<string>.Failure($"FFmpeg failed: {result.StandardError.Trim()}");
     }
 
-    private static string FormatTime(TimeSpan ts) => ts.ToString(@"hh\:mm\:ss\.fff");
-
-    private static string BuildCodecArgsFromMap(VideoFormat videoFormat, AudioFormat audioFormat)
+    private string BuildCodecArgs(VideoFormat videoFormat, AudioFormat audioFormat)
     {
         var parts = new List<string>();
 
         if (videoFormat != VideoFormat.Unspecified && videoFormat != VideoFormat.Gif)
         {
-            var vCodec = Models.CodecMap.GetBestVideoCodec(videoFormat);
-            parts.Add($"-c:v {vCodec.Encoder}");
+            var vEncoder = GetVideoEncoder(videoFormat);
+            var encoderArgs = GetEncoderArgs(videoFormat);
+            parts.Add($"-c:v {vEncoder} {encoderArgs}");
         }
 
         if (audioFormat != AudioFormat.Unspecified)
@@ -271,6 +438,8 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         return string.Join(" ", parts);
     }
 
+    private static string FormatTime(TimeSpan ts) => ts.ToString(@"hh\:mm\:ss\.fff");
+
     private static VideoFormat ExtensionToVideoFormat(string ext) => ext.ToLowerInvariant() switch
     {
         "mp4" => VideoFormat.Mp4,
@@ -284,7 +453,7 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
     [GeneratedRegex(@"time=(?<time>[\d:.]+)")]
     private static partial Regex FfmpegTimeRegex();
 
-    [GeneratedRegex(@"^out_time=(?<time>[\d:.]+)")]
+    [GeneratedRegex(@"out_time=\s*(?<time>[\d:.]+)")]
     private static partial Regex FfmpegProgressTimeRegex();
 
     #endregion

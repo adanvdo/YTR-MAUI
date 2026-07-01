@@ -3,8 +3,8 @@
 <MudPaper Class="pa-2" Elevation="1">
     <MudGrid>
         <MudItem xs="@(HasData ? 9 : 12)" sm="@(HasData ? 7 : 9)" md="@(HasData ? 9 : 10)">
-            <MudTextField @bind-Value="_url"
-                          Label="Media URL or Video ID"
+            <MudTextField @bind-Value="_url" @bind-Value:after="() => OnUrlChanged.InvokeAsync(_url)"
+                          Label="Media URL or Video ID"                          
                           Variant="Variant.Outlined" Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Link"
                           Immediate="true" OnKeyDown="OnKeyDown"
@@ -36,6 +36,7 @@
     private bool _loading;
 
     [Parameter] public EventCallback<UrlAnalysisResult> OnUrlAnalyzed { get; set; }
+    [Parameter] public EventCallback<string> OnUrlChanged { get; set; }
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool HasData { get; set; }
     [Parameter] public EventCallback OnReset { get; set; }

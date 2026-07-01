@@ -12,7 +12,7 @@
     <div class="home-content">
         <div class="home-main">
             <div class="home-fixed-top">
-                <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" IsLoading="_loadingFormats"
+                <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" OnUrlChanged="OnUrlChanged" IsLoading="_loadingFormats"
                            HasData="_metadata is not null" OnReset="ResetAll" />
                 <VideoInfoPanel Class="mt-2" Metadata="_metadata" />
             </div>
@@ -40,6 +40,7 @@
                           ShowDownloadSelected="_hasFormatSelection"
                           SelectedPair="_selectedPair"
                           ThumbnailUrl="@(_metadata?.ThumbnailUrl)"
+                          MediaDuration="@(_metadata?.Duration)"
                           IsPlaylist="@(_metadata?.IsPlaylist == true)" />
         </div>
     </div>
@@ -62,6 +63,18 @@
 
     private void OnUrlChanged(string url)
     {
+        // If formats were already fetched and the URL changes, reset everything
+        if (_metadata is not null && url != _currentUrl)
+        {
+            _metadata = null;
+            _formats = null;
+            _selectedPair = null;
+            _selectedFormat = null;
+            _selectedPlaylistItems = null;
+            _hasFormatSelection = false;
+            State.UpdateStatus(string.Empty);
+            StateHasChanged();
+        }
         _currentUrl = url;
     }
 

@@ -2,6 +2,7 @@
 @inject DownloadStateService State
 @inject ISettingsService Settings
 @inject IDialogService DialogService
+@inject IJSRuntime JS
 @implements IDisposable
 
 <MudPaper Class="pa-2 control-panel" Elevation="1">
@@ -26,7 +27,7 @@
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                             <MudText Typo="Typo.body2">Segment</MudText>
-                            @if (!_segmentExpanded && SegmentHasValues)
+                            @if (!_segmentExpanded && _segmentEnabled && SegmentHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
                             }
@@ -34,8 +35,12 @@
                     </TitleContent>
                     <ChildContent>
                         <MudStack Spacing="1" Class="cp-panel-segment">
-                            <MudTimePicker @bind-Time="_segmentStart" Label="Start" Dense="true" Margin="Margin.Dense" />
-                            <MudTimePicker @bind-Time="_segmentEnd" Dense="true" Margin="Margin.Dense"
+                            <MudSwitch @bind-Value="_segmentEnabled" Label="Enable" Color="Color.Primary"
+                                       Size="Size.Small" Class="cp-toggle" />
+                            <TimeSpanPicker Value="_segmentStart" ValueChanged="OnSegmentStartChanged"
+                                           Label="Start" Disabled="!_segmentEnabled" />
+                            <TimeSpanPicker Value="_segmentEnd" ValueChanged="OnSegmentEndChanged"
+                                           Disabled="!_segmentEnabled"
                                            Label="@(_segmentEndMode == SegmentMode.Duration ? "Duration" : "End Time")" />
                         </MudStack>
                     </ChildContent>
@@ -46,7 +51,7 @@
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                             <MudText Typo="Typo.body2">Crop</MudText>
-                            @if (!_cropExpanded && CropHasValues)
+                            @if (!_cropExpanded && _cropEnabled && CropHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
                             }
@@ -54,18 +59,21 @@
                     </TitleContent>
                     <ChildContent>
                         <MudStack Spacing="1" Class="cp-panel-crop">
+                            <MudSwitch @bind-Value="_cropEnabled" Label="Enable" Color="Color.Primary"
+                                       Size="Size.Small" Class="cp-toggle" />
                             @if (SelectedPair?.VideoFormat is not null && !string.IsNullOrEmpty(_thumbnailUrl))
                             {
                                 <MudButton Variant="Variant.Outlined" Size="Size.Small" FullWidth="true"
-                                           StartIcon="@Icons.Material.Filled.Crop" OnClick="OpenCropTool">
+                                           StartIcon="@Icons.Material.Filled.Crop" OnClick="OpenCropTool"
+                                           Disabled="!_cropEnabled">
                                     Visual Crop Tool
                                 </MudButton>
                             }
                             <MudGrid Spacing="1">
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" Dense="true" Margin="Margin.Dense" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
                             </MudGrid>
                         </MudStack>
                     </ChildContent>
@@ -78,7 +86,8 @@
                             <MudText Typo="Typo.body2">Convert</MudText>
                             @if (!_convertExpanded && ConvertHasValues)
                             {
-                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                                         Color="@(_alwaysConvert ? Color.Warning : Color.Primary)" />
                             }
                         </MudStack>
                     </TitleContent>
@@ -123,15 +132,21 @@
                     </TitleContent>
                     <ChildContent>
                         <MudStack Spacing="1" Class="cp-panel-limits">
+                            @if (ShowDownloadSelected)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Tertiary">
+                                    Disabled — using selected format
+                                </MudText>
+                            }
                             <MudSelect @bind-Value="_maxResolution" Label="Max Resolution" Variant="Variant.Outlined"
-                                       Dense="true" Margin="Margin.Dense">
+                                       Dense="true" Margin="Margin.Dense" Disabled="ShowDownloadSelected">
                                 @foreach (var res in Enum.GetValues<Resolution>())
                                 {
                                     <MudSelectItem Value="res">@res</MudSelectItem>
                                 }
                             </MudSelect>
                             <MudNumericField @bind-Value="_maxFileSize" Label="Max Size (MB, 0 = no limit)"
-                                             Variant="Variant.Outlined" Min="0" Dense="true" Margin="Margin.Dense" />
+                                             Variant="Variant.Outlined" Min="0" Dense="true" Margin="Margin.Dense" Disabled="ShowDownloadSelected" OnFocus="SelectAllText" />
                         </MudStack>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -155,7 +170,7 @@
                        Disabled="Disabled" OnClick="OnClickDownloadBest">
                 @(IsPlaylist ? "Download All [video+audio]" : "Download Best")
             </MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true"
                        StartIcon="@Icons.Material.Filled.AudioFile" Size="Size.Small"
                        Disabled="Disabled" OnClick="OnClickDownloadAudio">
                 @(IsPlaylist ? "Download All Audio" : "Download Audio")
@@ -180,10 +195,12 @@
     private TimeSpan? _segmentEnd;
     private SegmentMode _segmentEndMode;
     private bool _segmentExpanded;
+    private bool _segmentEnabled;
 
     // Crop
-    private int _cropTop, _cropBottom, _cropLeft, _cropRight;
+    private int? _cropTop, _cropBottom, _cropLeft, _cropRight;
     private bool _cropExpanded;
+    private bool _cropEnabled;
 
     // Convert
     private VideoFormat _convertVideo = VideoFormat.Unspecified;
@@ -201,15 +218,16 @@
     [Parameter] public bool IsPlaylist { get; set; }
     [Parameter] public FormatPair? SelectedPair { get; set; }
     [Parameter] public string? ThumbnailUrl { get; set; }
+    [Parameter] public TimeSpan? MediaDuration { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadVideo { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadAudio { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadBest { get; set; }
 
     private string? _thumbnailUrl => ThumbnailUrl;
 
-    // Active indicators
-    private bool SegmentHasValues => _segmentStart.HasValue || _segmentEnd.HasValue;
-    private bool CropHasValues => _cropTop > 0 || _cropBottom > 0 || _cropLeft > 0 || _cropRight > 0;
+    // Active indicators — only show when the panel is enabled
+    private bool SegmentHasValues => _segmentEnabled && (_segmentStart.HasValue || _segmentEnd.HasValue);
+    private bool CropHasValues => _cropEnabled && ((_cropTop ?? 0) > 0 || (_cropBottom ?? 0) > 0 || (_cropLeft ?? 0) > 0 || (_cropRight ?? 0) > 0);
     private bool ConvertHasValues => _convertVideo != VideoFormat.Unspecified || _convertAudio != AudioFormat.Unspecified;
     private bool LimitsHasValues => _maxResolution != Resolution.Any || _maxFileSize > 0;
 
@@ -226,7 +244,6 @@
         {
             _convertVideo = Settings.Processing.PreferredVideoFormat;
             _convertAudio = Settings.Processing.PreferredAudioFormat;
-            _convertExpanded = true;
         }
 
         // Apply enforced restrictions
@@ -293,31 +310,189 @@
     private DownloadRequest BuildRequest()
     {
         int[]? crops = null;
-        if (CropHasValues)
-            crops = [_cropTop, _cropBottom, _cropLeft, _cropRight];
+        if (_cropEnabled && CropHasValues)
+            crops = [_cropTop ?? 0, _cropBottom ?? 0, _cropLeft ?? 0, _cropRight ?? 0];
 
-        // Calculate segment duration based on mode
+        // Calculate segment duration based on mode (only if segment is enabled)
+        TimeSpan? segStart = null;
         TimeSpan? segDuration = null;
-        if (_segmentStart.HasValue && _segmentEnd.HasValue)
+        if (_segmentEnabled && _segmentStart.HasValue && _segmentEnd.HasValue)
         {
+            segStart = _segmentStart;
             segDuration = _segmentEndMode == SegmentMode.Duration
                 ? _segmentEnd
                 : _segmentEnd - _segmentStart;
+
+            // Final safety: clamp to media duration if known
+            var maxDuration = EffectiveDuration;
+            if (maxDuration.HasValue)
+            {
+                if (segStart.Value >= maxDuration.Value)
+                    segStart = maxDuration.Value - TimeSpan.FromSeconds(1);
+                if (segStart.Value < TimeSpan.Zero)
+                    segStart = TimeSpan.Zero;
+                if (segStart.Value + segDuration.Value > maxDuration.Value)
+                    segDuration = maxDuration.Value - segStart.Value;
+            }
+
+            // Ensure duration is at least 1s
+            if (segDuration.Value < TimeSpan.FromSeconds(1))
+                segDuration = TimeSpan.FromSeconds(1);
+        }
+        else if (_segmentEnabled && _segmentStart.HasValue)
+        {
+            segStart = _segmentStart;
+
+            // Clamp start if it exceeds duration
+            var maxDuration = EffectiveDuration;
+            if (maxDuration.HasValue && segStart.Value >= maxDuration.Value)
+            {
+                segStart = maxDuration.Value - TimeSpan.FromSeconds(1);
+                if (segStart.Value < TimeSpan.Zero) segStart = TimeSpan.Zero;
+            }
         }
 
         return new DownloadRequest
         {
-            SegmentStart = _segmentStart,
+            SegmentStart = segStart,
             SegmentDuration = segDuration,
             CropValues = crops,
             ConvertVideo = _convertVideo != VideoFormat.Unspecified ? _convertVideo : null,
-            ConvertAudio = _convertAudio != AudioFormat.Unspecified ? _convertAudio : null
+            ConvertAudio = _convertAudio != AudioFormat.Unspecified ? _convertAudio : null,
+            MaxResolutionPixels = ShowDownloadSelected ? 0 : _maxResolution switch
+            {
+                Resolution.Sd => 480,
+                Resolution.Hd720 => 720,
+                Resolution.Hd1080 => 1080,
+                Resolution.Uhd2160 => 2160,
+                _ => 0
+            },
+            MaxFileSizeMb = ShowDownloadSelected ? 0 : _maxFileSize
         };
     }
 
-    private async Task OnClickDownloadVideo() => await OnDownloadVideo.InvokeAsync(BuildRequest());
-    private async Task OnClickDownloadAudio() => await OnDownloadAudio.InvokeAsync(BuildRequest());
-    private async Task OnClickDownloadBest() => await OnDownloadBest.InvokeAsync(BuildRequest());
+    private async Task OnClickDownloadVideo()
+    {
+        CollapseAllPanels();
+        await OnDownloadVideo.InvokeAsync(BuildRequest());
+    }
+
+    private async Task OnClickDownloadAudio()
+    {
+        CollapseAllPanels();
+        await OnDownloadAudio.InvokeAsync(BuildRequest());
+    }
+
+    private async Task OnClickDownloadBest()
+    {
+        CollapseAllPanels();
+        await OnDownloadBest.InvokeAsync(BuildRequest());
+    }
+
+    private void CollapseAllPanels()
+    {
+        _segmentExpanded = false;
+        _cropExpanded = false;
+        _convertExpanded = false;
+        _limitsExpanded = false;
+    }
+
+    private async Task SelectAllText(FocusEventArgs e)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "document.activeElement?.select()");
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Gets the effective media duration from the selected format or the metadata parameter.
+    /// </summary>
+    private TimeSpan? EffectiveDuration => SelectedPair?.Duration ?? MediaDuration;
+
+    private void OnSegmentStartChanged(TimeSpan? value)
+    {
+        var maxDuration = EffectiveDuration;
+
+        if (value.HasValue && maxDuration.HasValue)
+        {
+            // Don't allow start >= duration - 1s
+            var maxStart = maxDuration.Value - TimeSpan.FromSeconds(1);
+            if (maxStart < TimeSpan.Zero) maxStart = TimeSpan.Zero;
+            if (value.Value > maxStart)
+                value = maxStart;
+        }
+
+        _segmentStart = value;
+
+        // Always ensure end is at least 1s after start (or 1s in duration mode)
+        if (value.HasValue)
+        {
+            var minEnd = _segmentEndMode == SegmentMode.Duration
+                ? TimeSpan.FromSeconds(1)
+                : value.Value + TimeSpan.FromSeconds(1);
+
+            if (!_segmentEnd.HasValue || _segmentEnd.Value < minEnd)
+            {
+                // Clamp to max duration if known
+                if (maxDuration.HasValue && minEnd > maxDuration.Value)
+                    minEnd = maxDuration.Value;
+                _segmentEnd = minEnd;
+            }
+        }
+    }
+
+    private void OnSegmentEndChanged(TimeSpan? value)
+    {
+        var maxDuration = EffectiveDuration;
+
+        // If cleared (null) but we have a start time, enforce minimum
+        if (!value.HasValue && _segmentStart.HasValue)
+        {
+            var minEnd = _segmentEndMode == SegmentMode.Duration
+                ? TimeSpan.FromSeconds(1)
+                : _segmentStart.Value + TimeSpan.FromSeconds(1);
+
+            if (maxDuration.HasValue && minEnd > maxDuration.Value)
+                minEnd = maxDuration.Value;
+
+            _segmentEnd = minEnd;
+            return;
+        }
+
+        if (value.HasValue)
+        {
+            // Minimum end: at least 1s after start (or 1s in duration mode)
+            var minEnd = _segmentEndMode == SegmentMode.Duration
+                ? TimeSpan.FromSeconds(1)
+                : (_segmentStart ?? TimeSpan.Zero) + TimeSpan.FromSeconds(1);
+
+            if (value.Value < minEnd)
+                value = minEnd;
+
+            // Clamp to media duration if known
+            if (maxDuration.HasValue)
+            {
+                if (_segmentEndMode == SegmentMode.Duration)
+                {
+                    var maxAllowed = _segmentStart.HasValue
+                        ? maxDuration.Value - _segmentStart.Value
+                        : maxDuration.Value;
+                    if (maxAllowed < TimeSpan.FromSeconds(1)) maxAllowed = TimeSpan.FromSeconds(1);
+                    if (value.Value > maxAllowed)
+                        value = maxAllowed;
+                }
+                else
+                {
+                    if (value.Value > maxDuration.Value)
+                        value = maxDuration.Value;
+                }
+            }
+        }
+
+        _segmentEnd = value;
+    }
 
     private async Task OpenCropTool()
     {
@@ -337,10 +512,11 @@
 
         if (result is not null && !result.Canceled && result.Data is int[] crops && crops.Length == 4)
         {
-            _cropTop = crops[0];
-            _cropBottom = crops[1];
-            _cropLeft = crops[2];
-            _cropRight = crops[3];
+            _cropTop = crops[0] > 0 ? crops[0] : null;
+            _cropBottom = crops[1] > 0 ? crops[1] : null;
+            _cropLeft = crops[2] > 0 ? crops[2] : null;
+            _cropRight = crops[3] > 0 ? crops[3] : null;
+            _cropEnabled = true;
             _cropExpanded = true;
         }
     }

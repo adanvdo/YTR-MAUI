@@ -25,6 +25,7 @@ public interface IMediaProcessor
         string inputPath,
         int x, int y, int width, int height,
         string outputPath,
+        TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default);
 
@@ -36,6 +37,7 @@ public interface IMediaProcessor
         VideoFormat videoFormat,
         AudioFormat audioFormat,
         string outputPath,
+        TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default);
 
@@ -74,6 +76,22 @@ public interface IMediaProcessor
         VideoFormat videoFormat,
         AudioFormat audioFormat,
         string outputPath,
+        TimeSpan? totalDuration = null,
+        IProgress<double>? progress = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Single-pass post-processing: combines segment, crop, and format conversion into one FFmpeg invocation.
+    /// Much faster than running each step separately since it avoids intermediate file I/O and redundant decoding.
+    /// </summary>
+    Task<Result<string>> PostProcessSinglePassAsync(
+        string inputPath,
+        string outputPath,
+        TimeSpan? segmentStart,
+        TimeSpan? segmentDuration,
+        int[]? cropValues,
+        VideoFormat videoFormat,
+        AudioFormat audioFormat,
         TimeSpan? totalDuration = null,
         IProgress<double>? progress = null,
         CancellationToken ct = default);

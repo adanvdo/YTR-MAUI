@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<winui:Window
+    x:Class="YTR.Maui.Platforms.Windows.QuickDownloadProgressWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:winui="using:Microsoft.UI.Xaml"
+    Title="YTR - Quick Download">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+          Padding="24" RowSpacing="12" MinWidth="420">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0" Text="Quick Download" FontSize="18" FontWeight="SemiBold"/>
+
+        <!-- URL -->
+        <TextBlock Grid.Row="1" x:Name="UrlText" TextTrimming="CharacterEllipsis"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   FontSize="13" MaxLines="2" TextWrapping="Wrap"/>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="2" x:Name="StatusText" Text="Preparing..."
+                   FontSize="14"/>
+
+        <!-- Progress Bar -->
+        <ProgressBar Grid.Row="3" x:Name="ProgressBar" Minimum="0" Maximum="100"
+                     Value="0" Height="8" IsIndeterminate="True"/>
+    </Grid>
+</winui:Window>

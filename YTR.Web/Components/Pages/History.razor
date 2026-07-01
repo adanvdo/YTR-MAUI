@@ -5,6 +5,7 @@
 
 <PageTitle>YTR - History</PageTitle>
 
+<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
     <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => Nav.NavigateTo("/"))" Title="Close" />
     <MudText Typo="Typo.h5">Download History</MudText>
@@ -22,6 +23,7 @@
     </MudMenu>
 </MudStack>
 
+<div style="flex:1;overflow-y:auto;min-height:0;">
 <MudDataGrid T="DownloadRecord" Items="_records" Dense="true" Hover="true"
              Loading="_loading" SortMode="SortMode.Single" Filterable="true"
              RowClick="OnRowClick">
@@ -50,6 +52,7 @@
         </TemplateColumn>
     </Columns>
 </MudDataGrid>
+</div>
 
 @* Detail tooltip on row click *@
 @if (_selectedRecord is not null)
@@ -77,6 +80,7 @@
         }
     </MudPaper>
 }
+</div>
 
 @code {
     private IReadOnlyList<DownloadRecord> _records = [];

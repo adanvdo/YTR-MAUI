@@ -52,20 +52,41 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         output?.Report("Starting download...");
         progress?.Report(new DownloadProgress { State = DownloadState.PreProcessing });
 
-        // If post-processing is needed and we have format URLs, process directly from stream
+        // Determine effective limits (from request overrides or global settings)
+        var maxRes = request?.MaxResolutionPixels ?? (restrictions.EnforceRestrictions ? restrictions.MaxResolutionPixels : 0);
+        var maxSize = request?.MaxFileSizeMb ?? (restrictions.EnforceRestrictions ? restrictions.MaxFileSizeMb : 0);
+
+        // If limits are set, fetch formats and pick the best one within constraints
+        if (maxRes > 0 || maxSize > 0)
+        {
+            output?.Report("Fetching formats to apply limits...");
+            var infoResult = await _ytDlp.GetMediaInfoAsync(url, ct);
+            if (infoResult.IsSuccess && infoResult.Value?.Formats is { Count: > 0 } formats)
+            {
+                var bestPair = SelectBestFormatWithinLimits(formats, streamKind, maxRes, maxSize);
+                if (bestPair is not null && bestPair.IsValid)
+                {
+                    output?.Report($"Selected format: {bestPair.DisplayText}");
+                    return await DownloadFormatAsync(url, bestPair, request, progress, output, ct);
+                }
+                // If no format found within limits, fall through to yt-dlp's built-in filtering
+                _logger.LogWarning("No format found within limits (res={MaxRes}, size={MaxSize}MB), using yt-dlp filtering", maxRes, maxSize);
+            }
+        }
+
+        // If post-processing is needed and we have format URLs, process directly from stream.
         if (request is not null && HasPostProcessing(request) && streamKind != StreamKind.Audio)
         {
             var streamResult = await ProcessFromStreamAsync(url, null, streamKind, request, progress, output, ct);
             if (streamResult.IsSuccess)
                 return streamResult;
-            // Fall through to download-then-process if stream processing fails
             _logger.LogWarning("Stream processing failed, falling back to download-then-process: {Error}", streamResult.Error);
         }
 
         var downloadResult = await _ytDlp.DownloadBestAsync(
             url, streamKind,
-            maxResolution: restrictions.MaxResolutionPixels,
-            maxFileSizeMb: restrictions.MaxFileSizeMb,
+            maxResolution: maxRes,
+            maxFileSizeMb: maxSize,
             outputPath: outputDir,
             progress: progress,
             output: output,
@@ -103,7 +124,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         output?.Report("Starting format download...");
         progress?.Report(new DownloadProgress { State = DownloadState.PreProcessing });
 
-        // If post-processing is needed, try stream-based processing first
+        // If post-processing is needed, try stream-based processing first.
         if (request is not null && HasPostProcessing(request) && streamKind != StreamKind.Audio)
         {
             var streamResult = await ProcessFromStreamAsync(url, formatPair, streamKind, request, progress, output, ct);
@@ -232,8 +253,8 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         var audioUrl = streamUrls.Count > 1 ? streamUrls[1] : null;
 
         // Build FFmpeg args for direct stream processing
-        output?.Report("Processing from stream...");
-        progress?.Report(new DownloadProgress { State = DownloadState.Downloading });
+        output?.Report("Downloading and processing...");
+        progress?.Report(new DownloadProgress { State = DownloadState.Downloading, Progress = 0 });
 
         var opts = _settings.Download;
         var outputDir = GetOutputDirectory(streamKind, request.PlaylistFolder);
@@ -309,127 +330,201 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             }))
             : null;
 
-        var tempFiles = new List<string>();
-        var currentPath = filePath;
+        // Probe the file to get its duration for progress reporting
+        TimeSpan? fileDuration = null;
+        var probeResult = await _probe.ProbeAsync(filePath, ct);
+        if (probeResult.IsSuccess)
+            fileDuration = probeResult.Value!.Duration;
 
-        try
+        // Validate crop values if present
+        int[]? validatedCrop = null;
+        if (request.CropValues is { Length: 4 } cropMargins && probeResult.IsSuccess
+            && probeResult.Value!.Width.HasValue && probeResult.Value.Height.HasValue)
         {
-            // Segment extraction
-            if (request.SegmentStart.HasValue && request.SegmentDuration.HasValue)
+            var crop = CropHelper.ConvertCrop(cropMargins, probeResult.Value.Width.Value, probeResult.Value.Height.Value);
+            if (crop is not null)
             {
-                var segOutput = GenerateProcessedPath(currentPath, "_seg");
-                output?.Report("Extracting segment...");
-                var segResult = await _mediaProcessor.ExtractSegmentAsync(
-                    currentPath, request.SegmentStart.Value, request.SegmentDuration.Value,
-                    segOutput, progress: ffmpegProgress, ct: ct);
-
-                if (segResult.IsSuccess)
-                {
-                    if (currentPath != filePath) tempFiles.Add(currentPath);
-                    currentPath = segResult.Value!;
-                }
-                else
-                {
-                    _logger.LogWarning("Segment extraction failed: {Error}", segResult.Error);
-                }
+                validatedCrop = cropMargins;
             }
-
-            // Crop — probe first to validate dimensions
-            if (request.CropValues is { Length: 4 } cropMargins)
+            else
             {
-                var probeResult = await _probe.ProbeAsync(currentPath, ct);
-                if (probeResult.IsSuccess && probeResult.Value!.Width.HasValue && probeResult.Value.Height.HasValue)
-                {
-                    var crop = CropHelper.ConvertCrop(cropMargins, probeResult.Value.Width.Value, probeResult.Value.Height.Value);
-                    if (crop is not null)
-                    {
-                        var cropOutput = GenerateProcessedPath(currentPath, "_crop");
-                        output?.Report("Applying crop...");
-                        var cropResult = await _mediaProcessor.CropAsync(
-                            currentPath, crop.X, crop.Y, crop.Width, crop.Height,
-                            cropOutput, progress: ffmpegProgress, ct: ct);
-
-                        if (cropResult.IsSuccess)
-                        {
-                            if (currentPath != filePath) tempFiles.Add(currentPath);
-                            currentPath = cropResult.Value!;
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Crop failed: {Error}", cropResult.Error);
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Crop coordinates exceed video dimensions ({W}x{H})", probeResult.Value.Width, probeResult.Value.Height);
-                    }
-                }
-            }
-
-            // Format conversion
-            if (request.ConvertVideo == VideoFormat.Gif)
-            {
-                var gifOutput = Path.ChangeExtension(GenerateProcessedPath(currentPath, "_gif"), ".gif");
-                output?.Report("Converting to GIF...");
-                var gifResult = await _mediaProcessor.ConvertToGifAsync(
-                    currentPath, gifOutput, progress: ffmpegProgress, ct: ct);
-
-                if (gifResult.IsSuccess)
-                {
-                    if (currentPath != filePath) tempFiles.Add(currentPath);
-                    currentPath = gifResult.Value!;
-                }
-            }
-            else if (request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified)
-            {
-                var ext = VideoFormatToExtension(request.ConvertVideo.Value);
-                var convOutput = Path.ChangeExtension(GenerateProcessedPath(currentPath, "_conv"), ext);
-                output?.Report($"Converting to {request.ConvertVideo.Value}...");
-                var convResult = await _mediaProcessor.ConvertAsync(
-                    currentPath, request.ConvertVideo.Value, request.ConvertAudio ?? AudioFormat.Unspecified,
-                    convOutput, progress: ffmpegProgress, ct: ct);
-
-                if (convResult.IsSuccess)
-                {
-                    if (currentPath != filePath) tempFiles.Add(currentPath);
-                    currentPath = convResult.Value!;
-                }
-            }
-            else if (request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified)
-            {
-                var ext = AudioFormatToExtension(request.ConvertAudio.Value);
-                var convOutput = Path.ChangeExtension(GenerateProcessedPath(currentPath, "_conv"), ext);
-                output?.Report($"Converting to {request.ConvertAudio.Value}...");
-                var convResult = await _mediaProcessor.ConvertAsync(
-                    currentPath, VideoFormat.Unspecified, request.ConvertAudio.Value,
-                    convOutput, progress: ffmpegProgress, ct: ct);
-
-                if (convResult.IsSuccess)
-                {
-                    if (currentPath != filePath) tempFiles.Add(currentPath);
-                    currentPath = convResult.Value!;
-                }
-            }
-
-            return currentPath;
-        }
-        finally
-        {
-            // Clean up all intermediate temp files
-            foreach (var temp in tempFiles)
-            {
-                try { File.Delete(temp); }
-                catch { /* best effort */ }
+                _logger.LogWarning("Crop coordinates exceed video dimensions ({W}x{H}), skipping crop",
+                    probeResult.Value.Width, probeResult.Value.Height);
             }
         }
+
+        // GIF is special — use the dedicated method
+        if (request.ConvertVideo == VideoFormat.Gif)
+        {
+            var gifOutput = Path.ChangeExtension(GenerateProcessedPath(filePath, "_gif"), ".gif");
+            output?.Report("Converting to GIF...");
+            var gifResult = await _mediaProcessor.ConvertToGifAsync(
+                filePath, gifOutput,
+                start: request.SegmentStart,
+                duration: request.SegmentDuration,
+                progress: ffmpegProgress, ct: ct);
+
+            if (gifResult.IsSuccess)
+            {
+                TryDeleteFile(filePath);
+                return gifResult.Value!;
+            }
+
+            _logger.LogWarning("GIF conversion failed: {Error}", gifResult.Error);
+            return filePath;
+        }
+
+        // Determine if we can use segment-only (stream copy) path
+        bool hasSegment = request.SegmentStart.HasValue && request.SegmentDuration.HasValue;
+        bool hasCrop = validatedCrop is not null;
+        bool hasConvert = (request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified)
+                       || (request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified);
+
+        // Skip unnecessary conversion: if the file is already in the target format, don't re-encode
+        if (hasConvert && !hasCrop)
+        {
+            var fileExt = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+            var targetVideoExt = request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified
+                ? VideoFormatToExtension(request.ConvertVideo.Value).TrimStart('.') : null;
+            var targetAudioExt = request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified
+                ? AudioFormatToExtension(request.ConvertAudio.Value).TrimStart('.') : null;
+
+            bool videoAlreadyMatches = targetVideoExt is null || fileExt == targetVideoExt;
+            bool audioAlreadyMatches = targetAudioExt is null; // Can't easily check audio codec from extension alone
+
+            if (videoAlreadyMatches && audioAlreadyMatches)
+            {
+                hasConvert = false;
+                _logger.LogInformation("Skipping conversion: file is already in target format ({Ext})", fileExt);
+            }
+        }
+
+        // If only segmenting (no crop, no convert), use fast stream-copy extraction
+        if (hasSegment && !hasCrop && !hasConvert)
+        {
+            var segOutput = GenerateProcessedPath(filePath, "_seg");
+            output?.Report("Extracting segment (stream copy)...");
+            var segResult = await _mediaProcessor.ExtractSegmentAsync(
+                filePath, request.SegmentStart!.Value, request.SegmentDuration!.Value,
+                segOutput, progress: ffmpegProgress, ct: ct);
+
+            if (segResult.IsSuccess)
+            {
+                TryDeleteFile(filePath);
+                return segResult.Value!;
+            }
+
+            _logger.LogWarning("Segment extraction failed: {Error}", segResult.Error);
+            return filePath;
+        }
+
+        // Single-pass: combine segment + crop + convert into one ffmpeg call
+        var videoFormat = request.ConvertVideo ?? VideoFormat.Unspecified;
+        var audioFormat = request.ConvertAudio ?? AudioFormat.Unspecified;
+
+        // Determine output extension
+        string ext;
+        if (videoFormat != VideoFormat.Unspecified)
+            ext = VideoFormatToExtension(videoFormat);
+        else if (audioFormat != AudioFormat.Unspecified && streamKind == StreamKind.Audio)
+            ext = AudioFormatToExtension(audioFormat);
+        else
+            ext = Path.GetExtension(filePath);
+
+        var outputPath = Path.ChangeExtension(GenerateProcessedPath(filePath, "_proc"), ext);
+
+        output?.Report("Processing (single pass)...");
+        var result = await _mediaProcessor.PostProcessSinglePassAsync(
+            filePath, outputPath,
+            segmentStart: hasSegment ? request.SegmentStart : null,
+            segmentDuration: hasSegment ? request.SegmentDuration : null,
+            cropValues: validatedCrop,
+            videoFormat: videoFormat,
+            audioFormat: audioFormat,
+            totalDuration: fileDuration,
+            progress: ffmpegProgress,
+            ct: ct);
+
+        if (result.IsSuccess)
+        {
+            TryDeleteFile(filePath);
+            return result.Value!;
+        }
+
+        _logger.LogWarning("Single-pass post-processing failed: {Error}. File returned as-is.", result.Error);
+        return filePath;
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { File.Delete(path); }
+        catch { /* best effort cleanup */ }
     }
 
     #endregion
 
     #region Helpers
 
+    /// <summary>
+    /// Selects the best video+audio format pair that fits within the given resolution and size limits.
+    /// </summary>
+    private static FormatPair? SelectBestFormatWithinLimits(
+        IReadOnlyList<FormatInfo> formats,
+        StreamKind streamKind,
+        int maxResolution,
+        int maxFileSizeMb)
+    {
+        long maxSizeBytes = maxFileSizeMb > 0 ? (long)maxFileSizeMb * 1024 * 1024 : long.MaxValue;
+
+        if (streamKind == StreamKind.Audio)
+        {
+            // Pick best audio format within size limit
+            var bestAudio = formats
+                .Where(f => f.StreamKind == StreamKind.Audio)
+                .Where(f => maxFileSizeMb <= 0 || (f.FileSize ?? f.ApproximateFileSize ?? 0) <= maxSizeBytes || (f.FileSize ?? f.ApproximateFileSize) is null)
+                .OrderByDescending(f => f.AudioBitrate ?? 0)
+                .FirstOrDefault();
+
+            return bestAudio is not null ? new FormatPair { AudioFormat = bestAudio } : null;
+        }
+
+        // Video formats within resolution limit
+        var videoFormats = formats
+            .Where(f => f.StreamKind is StreamKind.Video or StreamKind.AudioAndVideo)
+            .Where(f => maxResolution <= 0 || (f.Height ?? 0) <= maxResolution)
+            .Where(f => maxFileSizeMb <= 0 || (f.FileSize ?? f.ApproximateFileSize ?? 0) <= maxSizeBytes || (f.FileSize ?? f.ApproximateFileSize) is null)
+            .OrderByDescending(f => f.Height ?? 0)
+            .ThenByDescending(f => f.VideoBitrate ?? 0)
+            .ToList();
+
+        if (videoFormats.Count == 0) return null;
+
+        var bestVideo = videoFormats[0];
+
+        // If the best video format already has audio, use it as-is
+        if (bestVideo.StreamKind == StreamKind.AudioAndVideo)
+            return new FormatPair { VideoFormat = bestVideo };
+
+        // Otherwise pair with the best audio format
+        var bestAudioForPair = formats
+            .Where(f => f.StreamKind == StreamKind.Audio)
+            .OrderByDescending(f => f.AudioBitrate ?? 0)
+            .FirstOrDefault();
+
+        return new FormatPair { VideoFormat = bestVideo, AudioFormat = bestAudioForPair };
+    }
+
     private static bool HasPostProcessing(DownloadRequest request) =>
         request.SegmentStart.HasValue || request.SegmentDuration.HasValue ||
+        request.CropValues is not null ||
+        (request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified) ||
+        (request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified);
+
+    /// <summary>
+    /// Returns true if the request requires re-encoding (crop or format conversion).
+    /// Segment-only requests don't need re-encoding and are better handled by download + local stream-copy.
+    /// </summary>
+    private static bool NeedsReencoding(DownloadRequest request) =>
         request.CropValues is not null ||
         (request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified) ||
         (request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified);

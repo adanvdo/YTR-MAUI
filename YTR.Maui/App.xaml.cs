@@ -40,6 +40,8 @@ public partial class App : Application
     private WndProcDelegate? _wndProcDelegate;
     private nint _hwnd;
     private bool _isExiting;
+    private bool _hasMinimizedOnce;
+    private ITrayService? _tray;
 #endif
 
     public App(AppStartup startup)
@@ -127,6 +129,7 @@ public partial class App : Application
         // System tray (item 24 — uses app icon via Shell_NotifyIcon)
         var tray = services.GetService<ITrayService>();
         tray?.Initialize();
+        _tray = tray;
 
         if (tray is not null)
         {
@@ -164,6 +167,21 @@ public partial class App : Application
         if (msg == WM_SYSCOMMAND && (wParam & 0xFFF0) == SC_MINIMIZE && !_isExiting)
         {
             ShowWindow(hWnd, SW_HIDE);
+
+            // Show a one-time notification on first minimize to tray
+            if (!_hasMinimizedOnce)
+            {
+                _hasMinimizedOnce = true;
+                var message = "YTR is still running in the system tray. Double-click the tray icon to re-open.";
+                if (_settings?.Download.EnableHotkeys == true)
+                {
+                    var mods = _settings.Download.HotkeyModifiers;
+                    var key = _settings.Download.HotkeyKey;
+                    message += $"\nPress {mods}+{key} to quick download from any selected URL.";
+                }
+                _tray?.ShowNotification("YTR Minimized to Tray", message);
+            }
+
             return 0;
         }
 

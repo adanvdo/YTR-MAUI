@@ -28,3 +28,12 @@
 .cp-panel-limits {
     min-height: 90px;
 }
+
+::deep .cp-toggle {
+    margin-top: -4px;
+    margin-bottom: -4px;
+}
+
+::deep .cp-toggle .mud-switch-label {
+    font-size: 0.75rem;
+}

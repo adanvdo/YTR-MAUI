@@ -12,7 +12,18 @@ public sealed record MediaMetadata
     public string? Title { get; init; }
     public string? Description { get; init; }
     public TimeSpan? Duration { get; init; }
+
+    /// <summary>
+    /// URL of a thumbnail whose aspect ratio matches the video's aspect ratio.
+    /// Null if no matching thumbnail is available (visual crop tool should not be shown).
+    /// </summary>
     public string? ThumbnailUrl { get; init; }
+
+    /// <summary>
+    /// All available thumbnails for this media item.
+    /// </summary>
+    public IReadOnlyList<ThumbnailInfo> Thumbnails { get; init; } = [];
+
     public string? Uploader { get; init; }
     public DateTime? UploadDate { get; init; }
     public MediaPlatform Platform { get; init; }

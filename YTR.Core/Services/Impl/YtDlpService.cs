@@ -452,13 +452,56 @@ public sealed partial class YtDlpService : IYtDlpService
         var durationSec = root.GetDoubleOrDefault("duration");
         TimeSpan? duration = durationSec.HasValue ? TimeSpan.FromSeconds(durationSec.Value) : null;
 
-        // Get best thumbnail
-        string? thumbnailUrl = root.GetPropertyOrDefault("thumbnail", null);
-        if (thumbnailUrl is null && root.TryGetProperty("thumbnails", out var thumbs))
+        // Parse all available thumbnails
+        var thumbnails = new List<ThumbnailInfo>();
+        if (root.TryGetProperty("thumbnails", out var thumbs))
         {
-            var lastThumb = thumbs.EnumerateArray().LastOrDefault();
-            if (lastThumb.ValueKind != JsonValueKind.Undefined)
-                thumbnailUrl = lastThumb.GetPropertyOrDefault("url", null);
+            foreach (var thumb in thumbs.EnumerateArray())
+            {
+                var url = thumb.GetPropertyOrDefault("url", null);
+                if (string.IsNullOrEmpty(url)) continue;
+
+                thumbnails.Add(new ThumbnailInfo
+                {
+                    Url = url,
+                    Width = thumb.GetIntOrDefault("width"),
+                    Height = thumb.GetIntOrDefault("height"),
+                    Id = thumb.GetPropertyOrDefault("id", null)
+                });
+            }
+        }
+
+        // Determine video aspect ratio from formats (use the highest-resolution video format)
+        var videoAspectRatio = GetVideoAspectRatio(formats);
+
+        // Select the best thumbnail with a matching aspect ratio.
+        // Iterate from last (highest quality) to first and pick the first match.
+        string? thumbnailUrl = null;
+        if (videoAspectRatio.HasValue)
+        {
+            for (int i = thumbnails.Count - 1; i >= 0; i--)
+            {
+                var t = thumbnails[i];
+                if (t.Width.HasValue && t.Height.HasValue && t.Height.Value > 0)
+                {
+                    var thumbRatio = (double)t.Width.Value / t.Height.Value;
+                    if (Math.Abs(thumbRatio - videoAspectRatio.Value) < 0.05)
+                    {
+                        thumbnailUrl = t.Url;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If no aspect-ratio-matched thumbnail found but thumbnails exist without dimensions,
+        // fall back to null (don't guess — crop tool won't be shown)
+        // If we couldn't determine video aspect ratio, also fall back to the last thumbnail
+        // as a best-effort for display (but crop tool accuracy isn't guaranteed)
+        if (thumbnailUrl is null && videoAspectRatio is null)
+        {
+            // Can't determine video aspect ratio — use last thumbnail for display only
+            thumbnailUrl = thumbnails.Count > 0 ? thumbnails[^1].Url : root.GetPropertyOrDefault("thumbnail", null);
         }
 
         return new MediaMetadata
@@ -469,10 +512,27 @@ public sealed partial class YtDlpService : IYtDlpService
             Description = root.GetPropertyOrDefault("description", null),
             Duration = duration,
             ThumbnailUrl = thumbnailUrl,
+            Thumbnails = thumbnails,
             Uploader = root.GetPropertyOrDefault("uploader", null),
             Platform = MediaPlatform.Unknown, // Caller can set this from UrlAnalyzer
             Formats = formats
         };
+    }
+
+    /// <summary>
+    /// Determines the video aspect ratio from the available formats.
+    /// Uses the highest-resolution video format with valid dimensions.
+    /// </summary>
+    private static double? GetVideoAspectRatio(List<FormatInfo> formats)
+    {
+        var bestVideo = formats
+            .Where(f => f.Width.HasValue && f.Height.HasValue && f.Height.Value > 0
+                && f.StreamKind is StreamKind.Video or StreamKind.AudioAndVideo)
+            .OrderByDescending(f => f.Width!.Value * f.Height!.Value)
+            .FirstOrDefault();
+
+        if (bestVideo is null) return null;
+        return (double)bestVideo.Width!.Value / bestVideo.Height!.Value;
     }
 
     private static MediaMetadata ParsePlaylistJson(string json)

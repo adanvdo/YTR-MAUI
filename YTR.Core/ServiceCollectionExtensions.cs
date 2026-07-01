@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         // Services
         services.AddSingleton<IUrlAnalyzer, UrlAnalyzer>();
         services.AddSingleton<IProcessRunner, ProcessRunner>();
+        services.AddSingleton<IHardwareEncoderService, HardwareEncoderService>();
         services.AddScoped<IMediaProbeService, FfprobeMediaProbeService>();
         services.AddScoped<IHistoryService, HistoryService>();
         services.AddScoped<IYtDlpService, YtDlpService>();

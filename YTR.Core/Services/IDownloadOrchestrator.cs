@@ -58,6 +58,8 @@ public sealed record DownloadRequest
     public string? PlaylistFolder { get; init; }
     public string? Title { get; init; }
     public TimeSpan? MediaDuration { get; init; }
+    public int MaxResolutionPixels { get; init; }
+    public int MaxFileSizeMb { get; init; }
 }
 
 /// <summary>

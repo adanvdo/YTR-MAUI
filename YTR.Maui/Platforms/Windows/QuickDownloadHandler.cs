@@ -21,6 +21,7 @@ public sealed class QuickDownloadHandler
     private readonly IUrlAnalyzer _urlAnalyzer;
     private readonly IDownloadOrchestrator _orchestrator;
     private readonly INotificationService _notifications;
+    private readonly ISettingsService _settings;
     private readonly ILogger<QuickDownloadHandler> _logger;
 
     public QuickDownloadHandler(
@@ -29,6 +30,7 @@ public sealed class QuickDownloadHandler
         IUrlAnalyzer urlAnalyzer,
         IDownloadOrchestrator orchestrator,
         INotificationService notifications,
+        ISettingsService settings,
         ILogger<QuickDownloadHandler> logger)
     {
         _hotkey = hotkey;
@@ -36,6 +38,7 @@ public sealed class QuickDownloadHandler
         _urlAnalyzer = urlAnalyzer;
         _orchestrator = orchestrator;
         _notifications = notifications;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -45,11 +48,101 @@ public sealed class QuickDownloadHandler
     public void Initialize()
     {
         _hotkey.HotkeyPressed += OnHotkeyPressed;
-        _tray.QuickDownloadRequested += OnHotkeyPressed;
+        _tray.QuickDownloadRequested += OnTrayQuickDownloadRequested;
+    }
+
+    /// <summary>
+    /// Shows a URL input window when Quick Download is clicked from the tray menu.
+    /// </summary>
+    private void OnTrayQuickDownloadRequested()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var inputWindow = new QuickDownloadInputWindow();
+            inputWindow.DownloadRequested += url => _ = ExecuteDownloadAsync(url, inputWindow);
+            inputWindow.Activate();
+        });
+    }
+
+    /// <summary>
+    /// Executes the download for a given URL, reporting progress to the input window.
+    /// </summary>
+    private async Task ExecuteDownloadAsync(string url, QuickDownloadInputWindow inputWindow)
+    {
+        try
+        {
+            var analysis = _urlAnalyzer.Analyze(url);
+            if (!analysis.IsValid)
+            {
+                inputWindow.Complete($"✗ Not a supported URL", isError: true);
+                return;
+            }
+
+            _logger.LogInformation("Quick download (tray) triggered for {Url}", analysis.NormalizedUrl);
+            inputWindow.UpdateProgress($"Downloading from {analysis.Platform}...", 0, isIndeterminate: true);
+
+            var downloadProgress = new Progress<DownloadProgress>(p =>
+            {
+                var status = p.State switch
+                {
+                    DownloadState.PreProcessing => "Preparing...",
+                    DownloadState.Downloading => p.Speed is not null
+                        ? $"Downloading... {p.Progress:P0} ({p.Speed})"
+                        : $"Downloading... {p.Progress:P0}",
+                    DownloadState.PostProcessing => "Post-processing...",
+                    DownloadState.Success => "Complete!",
+                    DownloadState.Error => "Error",
+                    _ => "Working..."
+                };
+
+                var isIndeterminate = p.State == DownloadState.PreProcessing
+                    || (p.State == DownloadState.Downloading && p.Progress <= 0);
+
+                inputWindow.UpdateProgress(status, p.Progress, isIndeterminate);
+            });
+
+            var outputProgress = new Progress<string>(msg =>
+                _logger.LogDebug("Quick DL (tray): {Message}", msg));
+
+            var result = await _orchestrator.DownloadBestAsync(
+                analysis.NormalizedUrl,
+                StreamKind.AudioAndVideo,
+                progress: downloadProgress,
+                output: outputProgress);
+
+            if (result.IsSuccess)
+            {
+                inputWindow.Complete($"✓ {result.Value!.Title}");
+
+                if (_settings.Download.AutoOpenDownloadLocation)
+                {
+                    var folder = Path.GetDirectoryName(result.Value.FilePath);
+                    if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = folder,
+                            UseShellExecute = true
+                        });
+                    }
+                }
+            }
+            else
+            {
+                inputWindow.Complete($"✗ {result.Error}", isError: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Quick download (tray) failed.");
+            inputWindow.Complete($"✗ Error: {ex.Message}", isError: true);
+        }
     }
 
     private async void OnHotkeyPressed()
     {
+        QuickDownloadProgressWindow? progressWindow = null;
+
         try
         {
             // All clipboard operations must happen on the UI/STA thread
@@ -94,32 +187,81 @@ public sealed class QuickDownloadHandler
                 return;
             }
 
-            _tray.ShowNotification("Quick Download", $"Downloading from {analysis.Platform}...");
             _logger.LogInformation("Quick download triggered for {Url}", analysis.NormalizedUrl);
 
-            var progress = new Progress<string>(msg =>
+            // Show progress window on the UI thread
+            progressWindow = await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                var window = new QuickDownloadProgressWindow();
+                window.SetUrl(url);
+                window.UpdateProgress($"Downloading from {analysis.Platform}...", 0, isIndeterminate: true);
+                window.Activate();
+                return window;
+            });
+
+            var downloadProgress = new Progress<DownloadProgress>(p =>
+            {
+                var status = p.State switch
+                {
+                    DownloadState.PreProcessing => "Preparing...",
+                    DownloadState.Downloading => p.Speed is not null
+                        ? $"Downloading... {p.Progress:P0} ({p.Speed})"
+                        : $"Downloading... {p.Progress:P0}",
+                    DownloadState.PostProcessing => "Post-processing...",
+                    DownloadState.Success => "Complete!",
+                    DownloadState.Error => "Error",
+                    _ => "Working..."
+                };
+
+                var isIndeterminate = p.State == DownloadState.PreProcessing
+                    || (p.State == DownloadState.Downloading && p.Progress <= 0);
+
+                progressWindow?.UpdateProgress(status, p.Progress, isIndeterminate);
+            });
+
+            var outputProgress = new Progress<string>(msg =>
                 _logger.LogDebug("Quick DL: {Message}", msg));
 
             var result = await _orchestrator.DownloadBestAsync(
                 analysis.NormalizedUrl,
                 StreamKind.AudioAndVideo,
-                output: progress);
+                progress: downloadProgress,
+                output: outputProgress);
 
             if (result.IsSuccess)
             {
-                await _notifications.ShowDownloadCompleteAsync(
-                    result.Value!.Title,
-                    result.Value.FilePath);
+                progressWindow?.Complete($"✓ {result.Value!.Title}");
+
+                // Honor the auto-open download location setting
+                if (_settings.Download.AutoOpenDownloadLocation)
+                {
+                    var folder = Path.GetDirectoryName(result.Value.FilePath);
+                    if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = folder,
+                            UseShellExecute = true
+                        });
+                    }
+                }
             }
             else
             {
-                await _notifications.ShowErrorAsync("Quick Download Failed", result.Error!);
+                progressWindow?.Complete($"✗ {result.Error}", isError: true);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Quick download failed.");
-            _tray.ShowNotification("Quick Download", $"Error: {ex.Message}");
+            if (progressWindow is not null)
+            {
+                progressWindow.Complete($"✗ Error: {ex.Message}", isError: true);
+            }
+            else
+            {
+                _tray.ShowNotification("Quick Download", $"Error: {ex.Message}");
+            }
         }
     }
 

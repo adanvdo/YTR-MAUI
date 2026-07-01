@@ -57,19 +57,31 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 
     public void ShowNotification(string title, string message)
     {
-        if (_windowHandle == 0) return;
-
-        var nid = new NOTIFYICONDATA
+        // Use Windows Toast Notifications for proper Action Center integration
+        try
         {
-            cbSize = Marshal.SizeOf<NOTIFYICONDATA>(),
-            hWnd = _windowHandle,
-            uID = 1,
-            uFlags = NIF_INFO,
-            szInfoTitle = title.Length > 63 ? title[..63] : title,
-            szInfo = message.Length > 255 ? message[..255] : message,
-            dwInfoFlags = NIIF_INFO
-        };
-        Shell_NotifyIcon(NIM_MODIFY, ref nid);
+            new Microsoft.Toolkit.Uwp.Notifications.ToastContentBuilder()
+                .AddText(title)
+                .AddText(message)
+                .Show();
+        }
+        catch
+        {
+            // Fallback to balloon tip if toast fails
+            if (_windowHandle == 0) return;
+
+            var nid = new NOTIFYICONDATA
+            {
+                cbSize = Marshal.SizeOf<NOTIFYICONDATA>(),
+                hWnd = _windowHandle,
+                uID = 1,
+                uFlags = NIF_INFO,
+                szInfoTitle = title.Length > 63 ? title[..63] : title,
+                szInfo = message.Length > 255 ? message[..255] : message,
+                dwInfoFlags = NIIF_INFO
+            };
+            Shell_NotifyIcon(NIM_MODIFY, ref nid);
+        }
     }
 
     public void Dispose()
