@@ -30,5 +30,6 @@ installer/tools/*.exe
 /YTR.Maui/Resources/App/yt-dlp.exe
 /YTR.Maui/Resources/App/ffmpeg.exe
 /YTR.Maui/Resources/App/ffprobe.exe
+/YTR.Maui/Resources/App/node.exe
 
 publish-windows.bat
