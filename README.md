@@ -35,7 +35,7 @@ A fast, feature-rich desktop app for downloading video and audio from popular pl
 ## Installation
 
 1. Download the latest installer from the [Releases](https://github.com/adanvdo/YTR-MAUI/releases) page.
-2. Run `YTR-Setup-x.x.x.exe` and follow the prompts.
+2. Run `YTR-Setup.exe` and follow the prompts.
 3. Launch YTR from the Start Menu or desktop shortcut.
 
 All required tools (yt-dlp, FFmpeg) are bundled with the installer — no extra setup needed.
