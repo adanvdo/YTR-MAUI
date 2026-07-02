@@ -113,16 +113,14 @@
                     @if (_depChecking) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
                     Check Versions
                 </MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
-                           Disabled="@(_depUpdating || _latestYtDlp is null)"
-                           OnClick="UpdateYtDlp">
-                    Update yt-dlp
-                </MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
-                           Disabled="@(_depUpdating || _latestFfmpeg is null)"
-                           OnClick="UpdateFfmpeg">
-                    Update FFmpeg
-                </MudButton>
+                @if (_latestYtDlp is not null || _latestFfmpeg is not null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2"
+                               Disabled="_depUpdating"
+                               OnClick="UpdateDependencies">
+                        Update
+                    </MudButton>
+                }
             </MudCardActions>
         </MudCard>
     </MudItem>
@@ -241,7 +239,7 @@
         StateHasChanged();
     }
 
-    private async Task UpdateYtDlp()
+    private async Task UpdateDependencies()
     {
         _depUpdating = true;
         _depProgress = 0;
@@ -254,36 +252,34 @@
             InvokeAsync(StateHasChanged);
         });
 
-        var result = await DependencyUpdater.UpdateYtDlpAsync(progress);
-
-        if (result.IsFailure)
-            _depError = result.Error;
-        else
-            _latestYtDlp = null; // Clear "latest" chip since we're now up to date
-
-        _depUpdating = false;
-        StateHasChanged();
-    }
-
-    private async Task UpdateFfmpeg()
-    {
-        _depUpdating = true;
-        _depProgress = 0;
-        _depError = null;
-        StateHasChanged();
-
-        var progress = new Progress<double>(p =>
+        if (_latestYtDlp is not null)
         {
-            _depProgress = p;
-            InvokeAsync(StateHasChanged);
-        });
+            var result = await DependencyUpdater.UpdateYtDlpAsync(progress);
+            if (result.IsFailure)
+            {
+                _depError = result.Error;
+                _depUpdating = false;
+                StateHasChanged();
+                return;
+            }
+            _latestYtDlp = null;
+        }
 
-        var result = await DependencyUpdater.UpdateFfmpegAsync(progress);
+        if (_latestFfmpeg is not null)
+        {
+            _depProgress = 0;
+            StateHasChanged();
 
-        if (result.IsFailure)
-            _depError = result.Error;
-        else
+            var result = await DependencyUpdater.UpdateFfmpegAsync(progress);
+            if (result.IsFailure)
+            {
+                _depError = result.Error;
+                _depUpdating = false;
+                StateHasChanged();
+                return;
+            }
             _latestFfmpeg = null;
+        }
 
         _depUpdating = false;
         StateHasChanged();

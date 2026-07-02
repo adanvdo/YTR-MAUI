@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6.x — https://jrsoftware.org/isinfo.php
 
 #define MyAppName "YTR"
-; Keep in sync with YtrVersion in Directory.Build.props
+; Patched automatically by publish-windows.bat from Directory.Build.props
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "JAMGALACTIC"
 #define MyAppURL "https://jamgalactic.com"
@@ -22,7 +22,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\publish\installer
-OutputBaseFilename=YTR-Setup-{#MyAppVersion}
+OutputBaseFilename=YTR-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -30,8 +30,8 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Uncomment and set path when you have an .ico file:
-; SetupIconFile=..\YTR.Maui\Resources\AppIcon\ytr.ico
-; UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\YTR.Core\Resources\AppIcon\appicon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

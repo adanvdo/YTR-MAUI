@@ -1,8 +1,13 @@
-# YTR — Media Downloader
+# Yank - Tweak - Retain
 
-A fast, feature-rich desktop app for downloading video and audio from popular platforms. Paste a link, pick your format, and download — it's that simple.
+<p align="center">
+  <img src="YTR.Core/Resources/YTRBanner.jpg" alt="YTR Banner" />
+</p>
+
+YTR is a fast, feature-rich app for downloading media from popular platforms. Available on Windows and Android.
 
 ![Windows](https://img.shields.io/badge/platform-Windows-blue)
+![Android](https://img.shields.io/badge/platform-Android-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 ---

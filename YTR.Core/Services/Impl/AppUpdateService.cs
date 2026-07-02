@@ -6,7 +6,7 @@ using YTR.Core.Models;
 namespace YTR.Core.Services.Impl;
 
 /// <summary>
-/// Checks for and downloads application updates from the jamgalactic.com API.
+/// Checks for and downloads application updates from GitHub Releases.
 /// Nothing is automatic — the user must explicitly trigger check and install.
 /// </summary>
 public sealed class AppUpdateService : IAppUpdateService
@@ -15,7 +15,8 @@ public sealed class AppUpdateService : IAppUpdateService
     private readonly IPlatformService _platform;
     private readonly ILogger<AppUpdateService> _logger;
 
-    private const string ApiBaseUrl = "https://www.jamgalactic.com/api";
+    private const string GitHubReleasesUrl = "https://api.github.com/repos/adanvdo/YTR-MAUI/releases";
+    private const string InstallerAssetName = "YTR-Setup.exe";
 
     public AppUpdateService(
         IHttpClientFactory httpClientFactory,
@@ -24,6 +25,7 @@ public sealed class AppUpdateService : IAppUpdateService
     {
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("YTR/2.0");
+        _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         _platform = platform;
         _logger = logger;
     }
@@ -32,34 +34,33 @@ public sealed class AppUpdateService : IAppUpdateService
     {
         try
         {
-            var url = $"{ApiBaseUrl}/getlatest?channel={(int)channel}";
+            var currentVersion = GetCurrentVersion();
+
+            // For stable, we can use the /latest endpoint directly
+            // For beta/alpha, we need to scan all releases
+            var url = channel == ReleaseChannel.Stable
+                ? $"{GitHubReleasesUrl}/latest"
+                : $"{GitHubReleasesUrl}?per_page=20";
+
             var response = await _httpClient.GetAsync(url, ct);
 
             if (!response.IsSuccessStatusCode)
-                return Result<AppRelease?>.Failure($"Server returned {response.StatusCode}.");
+                return Result<AppRelease?>.Failure($"GitHub returned {(int)response.StatusCode} {response.StatusCode}.");
 
-            var content = await response.Content.ReadAsStringAsync(ct);
-            if (string.IsNullOrWhiteSpace(content) || content == "Unknown")
-                return Result<AppRelease?>.Success(null); // No update available
+            var json = await response.Content.ReadAsStringAsync(ct);
 
-            var release = JsonSerializer.Deserialize<ApiReleaseResponse>(content, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            AppRelease? release = channel == ReleaseChannel.Stable
+                ? ParseSingleRelease(json, channel)
+                : FindLatestForChannel(json, channel);
 
             if (release is null)
                 return Result<AppRelease?>.Success(null);
 
-            return Result<AppRelease?>.Success(new AppRelease
-            {
-                ReleaseId = release.ReleaseID,
-                Channel = (ReleaseChannel)release.Channel,
-                Version = new Version(release.Major, release.Minor, release.Build, release.Revision),
-                ReleaseDate = release.ReleaseDate,
-                Active = release.Active,
-                DownloadUrl = release.x64Url ?? release.x86Url,
-                ManualInstallRequired = release.ManualInstallRequired
-            });
+            // Only report an update if the remote version is newer
+            if (release.Version <= currentVersion)
+                return Result<AppRelease?>.Success(null);
+
+            return Result<AppRelease?>.Success(release);
         }
         catch (Exception ex)
         {
@@ -78,8 +79,7 @@ public sealed class AppUpdateService : IAppUpdateService
             var updateDir = Path.Combine(_platform.AppDataDirectory, "Updates");
             Directory.CreateDirectory(updateDir);
 
-            var fileName = Path.GetFileName(new Uri(release.DownloadUrl).LocalPath);
-            var filePath = Path.Combine(updateDir, fileName);
+            var filePath = Path.Combine(updateDir, InstallerAssetName);
 
             // Delete existing file if present
             if (File.Exists(filePath))
@@ -118,53 +118,131 @@ public sealed class AppUpdateService : IAppUpdateService
         }
     }
 
-    public async Task<Result> InstallUpdateAsync(string packagePath, CancellationToken ct = default)
+    public async Task InstallUpdateAsync(string installerPath)
     {
-        if (!File.Exists(packagePath))
-            return Result.Failure("Update package not found.");
+        if (!File.Exists(installerPath))
+            return;
 
-        try
+        // Launch the downloaded installer and exit
+        var startInfo = new System.Diagnostics.ProcessStartInfo
         {
-            // Launch the updater executable and exit the current app
-            var updaterPath = Path.Combine(AppContext.BaseDirectory, "YTR_Updater.exe");
-            if (!File.Exists(updaterPath))
-            {
-                // Fallback: just open the package location for manual install
-                await _platform.OpenFolderAsync(Path.GetDirectoryName(packagePath)!);
-                return Result.Success();
-            }
+            FileName = installerPath,
+            UseShellExecute = true
+        };
+        System.Diagnostics.Process.Start(startInfo);
 
-            var startInfo = new System.Diagnostics.ProcessStartInfo
+        // Give the installer a moment to start, then exit
+        await Task.Delay(500);
+        Environment.Exit(0);
+    }
+
+    private AppRelease? ParseSingleRelease(string json, ReleaseChannel channel)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return ParseReleaseElement(doc.RootElement, channel);
+    }
+
+    private AppRelease? FindLatestForChannel(string json, ReleaseChannel channel)
+    {
+        using var doc = JsonDocument.Parse(json);
+
+        foreach (var element in doc.RootElement.EnumerateArray())
+        {
+            var tagName = element.GetProperty("tag_name").GetString() ?? string.Empty;
+            var releaseChannel = GetChannelFromTag(tagName);
+
+            // For beta channel: accept beta and stable releases
+            // For alpha channel: accept alpha, beta, and stable releases
+            var matches = channel switch
             {
-                FileName = updaterPath,
-                Arguments = $"\"{packagePath}\"",
-                UseShellExecute = true
+                ReleaseChannel.Beta => releaseChannel is ReleaseChannel.Beta or ReleaseChannel.Stable,
+                ReleaseChannel.Alpha => true,
+                _ => releaseChannel == ReleaseChannel.Stable
             };
-            System.Diagnostics.Process.Start(startInfo);
-            return Result.Success();
+
+            if (matches)
+            {
+                var release = ParseReleaseElement(element, releaseChannel);
+                if (release is not null)
+                    return release;
+            }
         }
-        catch (Exception ex)
+
+        return null;
+    }
+
+    private AppRelease? ParseReleaseElement(JsonElement element, ReleaseChannel channel)
+    {
+        var tagName = element.GetProperty("tag_name").GetString() ?? string.Empty;
+        var version = ParseVersionFromTag(tagName);
+        if (version is null)
+            return null;
+
+        // Find the installer asset
+        string? downloadUrl = null;
+        if (element.TryGetProperty("assets", out var assets))
         {
-            _logger.LogError(ex, "Failed to launch updater.");
-            return Result.Failure($"Install failed: {ex.Message}");
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = asset.GetProperty("name").GetString();
+                if (string.Equals(name, InstallerAssetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    downloadUrl = asset.GetProperty("browser_download_url").GetString();
+                    break;
+                }
+            }
         }
+
+        var publishedAt = element.TryGetProperty("published_at", out var pub)
+            ? DateTime.TryParse(pub.GetString(), out var dt) ? dt : DateTime.MinValue
+            : DateTime.MinValue;
+
+        var releaseNotes = element.TryGetProperty("body", out var body)
+            ? body.GetString()
+            : null;
+
+        return new AppRelease
+        {
+            TagName = tagName,
+            Version = version,
+            Channel = channel,
+            ReleaseDate = publishedAt,
+            DownloadUrl = downloadUrl,
+            ReleaseNotes = releaseNotes
+        };
+    }
+
+    private static ReleaseChannel GetChannelFromTag(string tag)
+    {
+        if (tag.Contains("-alpha", StringComparison.OrdinalIgnoreCase))
+            return ReleaseChannel.Alpha;
+        if (tag.Contains("-beta", StringComparison.OrdinalIgnoreCase))
+            return ReleaseChannel.Beta;
+        return ReleaseChannel.Stable;
     }
 
     /// <summary>
-    /// Matches the JSON shape returned by the jamgalactic.com API.
+    /// Parses a version from a tag like "v1.2.3", "v1.2.3-beta.1", or "v1.0.0-alpha.2".
     /// </summary>
-    private sealed class ApiReleaseResponse
+    private static Version? ParseVersionFromTag(string tag)
     {
-        public Guid ReleaseID { get; set; }
-        public int Channel { get; set; }
-        public int Major { get; set; }
-        public int Minor { get; set; }
-        public int Build { get; set; }
-        public int Revision { get; set; }
-        public DateTime ReleaseDate { get; set; }
-        public bool Active { get; set; }
-        public string? x86Url { get; set; }
-        public string? x64Url { get; set; }
-        public bool ManualInstallRequired { get; set; }
+        if (string.IsNullOrEmpty(tag))
+            return null;
+
+        // Strip leading 'v'
+        var versionStr = tag.StartsWith('v') ? tag[1..] : tag;
+
+        // Strip pre-release suffix (everything after first '-')
+        var hyphenIndex = versionStr.IndexOf('-');
+        if (hyphenIndex > 0)
+            versionStr = versionStr[..hyphenIndex];
+
+        return Version.TryParse(versionStr, out var version) ? version : null;
+    }
+
+    private static Version GetCurrentVersion()
+    {
+        var asm = System.Reflection.Assembly.GetEntryAssembly();
+        return asm?.GetName().Version ?? new Version(0, 0, 0);
     }
 }
