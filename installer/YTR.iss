@@ -3,7 +3,7 @@
 
 #define MyAppName "YTR"
 ; Patched automatically by publish-windows.bat from Directory.Build.props
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.0.0"
 #define MyAppPublisher "JAMGALACTIC"
 #define MyAppURL "https://jamgalactic.com"
 #define MyAppExeName "YTR.exe"
