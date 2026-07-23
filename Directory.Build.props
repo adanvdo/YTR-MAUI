@@ -2,17 +2,17 @@
 
   <PropertyGroup>
     <!--
-      Shared app version — the user-visible version across all platforms.
-      Bump this for every release (Major.Minor.Patch).
+      App version segments: Major.Stable.Beta.Alpha
+      Only the segment for the current release channel is incremented,
+      and segments to its right are reset to 0.
     -->
     <YtrVersion>1.0.0</YtrVersion>
 
     <!--
-      Windows-specific build number.
-      Appended as the 4th segment: 1.0.0.1 → used in assembly version.
-      Increment when releasing a Windows-only patch or rebuild.
+      Alpha build number — the 4th version segment.
+      Incremented on alpha releases, reset on beta/stable releases.
     -->
-    <YtrWindowsBuild>1</YtrWindowsBuild>
+    <YtrAlphaBuild>0</YtrAlphaBuild>
 
     <!--
       Android version code — must increment with every Play Store upload.

@@ -29,16 +29,16 @@
         <ApplicationId>com.jamgalactic.ytr</ApplicationId>
 
         <!-- Versions (sourced from Directory.Build.props) -->
-        <ApplicationDisplayVersion>$(YtrVersion)</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>$(YtrVersion).$(YtrAlphaBuild)</ApplicationDisplayVersion>
 
-        <!-- Windows: use the Windows build number -->
-        <ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrWindowsBuild)</ApplicationVersion>
+        <!-- Windows: use the alpha build number -->
+        <ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrAlphaBuild)</ApplicationVersion>
 
         <!-- Android: use the Android version code (must increment per Play Store upload) -->
         <ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">$(YtrAndroidVersionCode)</ApplicationVersion>
 
         <!-- Assembly version includes full 4-segment version for Windows -->
-        <Version Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrVersion).$(YtrWindowsBuild)</Version>
+        <Version Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrVersion).$(YtrAlphaBuild)</Version>
         <Version Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">$(YtrVersion).$(YtrAndroidVersionCode)</Version>
 
         <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
