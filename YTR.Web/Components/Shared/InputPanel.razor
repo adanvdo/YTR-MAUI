@@ -2,7 +2,7 @@
 
 <MudPaper Class="pa-2" Elevation="1">
     <MudGrid>
-        <MudItem xs="@(HasData ? 9 : 12)" sm="@(HasData ? 7 : 9)" md="@(HasData ? 9 : 10)">
+        <MudItem xs="@(ShowReset ? 9 : 12)" sm="@(ShowReset ? 7 : 9)" md="@(ShowReset ? 9 : 10)">
             <MudTextField @bind-Value="_url" @bind-Value:after="() => OnUrlChanged.InvokeAsync(_url)"
                           Label="Media URL or Video ID"                          
                           Variant="Variant.Outlined" Adornment="Adornment.Start"
@@ -10,7 +10,7 @@
                           Immediate="true" OnKeyDown="OnKeyDown"
                           Placeholder="Paste a YouTube, Reddit, Twitter, Twitch, Vimeo, Instagram, or TikTok URL" />
         </MudItem>
-        @if (HasData)
+        @if (ShowReset)
         {
             <MudItem xs="3" sm="2" md="1" Class="pl-3 pt-6 pr-0 pb-0 d-flex align-center">
                 <MudIconButton Icon="@Icons.Material.Filled.SettingsBackupRestore"
@@ -39,7 +39,10 @@
     [Parameter] public EventCallback<string> OnUrlChanged { get; set; }
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool HasData { get; set; }
+    [Parameter] public bool HasOptions { get; set; }
     [Parameter] public EventCallback OnReset { get; set; }
+
+    private bool ShowReset => HasData || HasOptions;
 
     protected override void OnParametersSet()
     {

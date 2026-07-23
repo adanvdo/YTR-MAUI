@@ -269,3 +269,28 @@ html, body {
 .settings-save-bar .mud-alert {
     padding: 0;
 }
+
+/* ControlPanel flash animations */
+@keyframes flash-to-red {
+    0% { color: inherit; }
+    25% { color: var(--mud-palette-error); }
+    50% { color: inherit; }
+    75% { color: var(--mud-palette-error); }
+    100% { color: var(--mud-palette-error); }
+}
+
+@keyframes flash-border {
+    0%, 100% { border-color: transparent; }
+    50% { border-color: var(--mud-palette-error); }
+}
+
+@keyframes blink-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Highlight non-default inputs after URL change warning */
+.cp-highlight .mud-input-outlined-border {
+    border-color: var(--mud-palette-error) !important;
+    border-width: 2px !important;
+}

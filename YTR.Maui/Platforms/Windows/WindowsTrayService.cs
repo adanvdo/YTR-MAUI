@@ -60,10 +60,15 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
         // Use Windows Toast Notifications for proper Action Center integration
         try
         {
-            new Microsoft.Toolkit.Uwp.Notifications.ToastContentBuilder()
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "App", "appicon.png");
+            var builder = new Microsoft.Toolkit.Uwp.Notifications.ToastContentBuilder()
                 .AddText(title)
-                .AddText(message)
-                .Show();
+                .AddText(message);
+
+            if (File.Exists(iconPath))
+                builder.AddAppLogoOverride(new Uri(iconPath));
+
+            builder.Show();
         }
         catch
         {
@@ -116,6 +121,11 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
             Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
 
         // Add tray icon
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "App", "appicon.ico");
+        var hIcon = File.Exists(iconPath)
+            ? LoadImage(0, iconPath, 1 /* IMAGE_ICON */, 16, 16, 0x0010 /* LR_LOADFROMFILE */)
+            : LoadIcon(0, new nint(32512)); // Fallback to default
+
         var nid = new NOTIFYICONDATA
         {
             cbSize = Marshal.SizeOf<NOTIFYICONDATA>(),
@@ -123,7 +133,7 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
             uID = 1,
             uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
             uCallbackMessage = WM_USER_TRAY,
-            hIcon = LoadIcon(0, new nint(32512)), // IDI_APPLICATION
+            hIcon = hIcon,
             szTip = "YTR - Media Downloader"
         };
         Shell_NotifyIcon(NIM_ADD, ref nid);
@@ -250,6 +260,9 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 
     [DllImport("user32.dll")]
     private static extern nint LoadIcon(int hInstance, nint lpIconName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint LoadImage(int hInstance, string lpszName, int uType, int cxDesired, int cyDesired, int fuLoad);
 
     [DllImport("user32.dll")]
     private static extern nint CreatePopupMenu();

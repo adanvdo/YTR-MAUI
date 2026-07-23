@@ -13,7 +13,7 @@
         <div class="home-main">
             <div class="home-fixed-top">
                 <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" OnUrlChanged="OnUrlChanged" IsLoading="_loadingFormats"
-                           HasData="_metadata is not null" OnReset="ResetAll" />
+                           HasData="_metadata is not null" HasOptions="_hasOptions" OnReset="ResetAll" />
                 <VideoInfoPanel Class="mt-2" Metadata="_metadata" />
             </div>
 
@@ -33,7 +33,8 @@
         </div>
 
         <div class="home-sidebar">
-            <ControlPanel OnDownloadVideo="DownloadVideo"
+            <ControlPanel @ref="_controlPanel"
+                          OnDownloadVideo="DownloadVideo"
                           OnDownloadAudio="DownloadAudio"
                           OnDownloadBest="DownloadBest"
                           Disabled="_downloading"
@@ -41,7 +42,8 @@
                           SelectedPair="_selectedPair"
                           ThumbnailUrl="@(_metadata?.ThumbnailUrl)"
                           MediaDuration="@(_metadata?.Duration)"
-                          IsPlaylist="@(_metadata?.IsPlaylist == true)" />
+                          IsPlaylist="@(_metadata?.IsPlaylist == true)"
+                          HasOptionsChanged="OnOptionsChanged" />
         </div>
     </div>
 
@@ -56,12 +58,14 @@
     private FormatPair? _selectedPair;
     private FormatInfo? _selectedFormat;
     private IReadOnlyList<PlaylistItem>? _selectedPlaylistItems;
+    private ControlPanel? _controlPanel;
     private bool _downloading;
     private bool _loadingFormats;
     private bool _hasFormatSelection;
+    private bool _hasOptions;
     private string _currentUrl = string.Empty;
 
-    private void OnUrlChanged(string url)
+    private async Task OnUrlChanged(string url)
     {
         // If formats were already fetched and the URL changes, reset everything
         if (_metadata is not null && url != _currentUrl)
@@ -73,9 +77,14 @@
             _selectedPlaylistItems = null;
             _hasFormatSelection = false;
             State.UpdateStatus(string.Empty);
-            StateHasChanged();
         }
         _currentUrl = url;
+
+        // Reset media-specific options and flash persistent ones
+        if (_controlPanel is not null)
+            await _controlPanel.OnUrlChangedAsync();
+
+        StateHasChanged();
     }
 
     private void ResetAll()
@@ -87,7 +96,9 @@
         _selectedFormat = null;
         _selectedPlaylistItems = null;
         _hasFormatSelection = false;
+        _hasOptions = false;
         State.UpdateStatus(string.Empty);
+        _controlPanel?.ResetOptions();
     }
 
     private async Task OnUrlAnalyzed(UrlAnalysisResult analysis)
@@ -111,7 +122,7 @@
         if (result.IsSuccess && result.Value is not null)
         {
             _metadata = result.Value;
-            _formats = result.Value.Formats;
+            _formats = FilterFormats(result.Value.Formats);
             State.UpdateStatus($"Found {_formats.Count} formats.");
         }
         else
@@ -137,6 +148,12 @@
     private void OnPlaylistSelectionChanged(IReadOnlyList<PlaylistItem> items)
     {
         _selectedPlaylistItems = items;
+    }
+
+    private void OnOptionsChanged(bool hasOptions)
+    {
+        _hasOptions = hasOptions;
+        StateHasChanged();
     }
 
     private async Task DownloadVideo(DownloadRequest request)
@@ -256,5 +273,33 @@
         {
             State.UpdateStatus($"Failed: {result.Error}");
         }
+    }
+
+    private IReadOnlyList<FormatInfo> FilterFormats(IReadOnlyList<FormatInfo> formats)
+    {
+        var maxRes = _controlPanel?.ActiveMaxResolutionPixels ?? 0;
+        var maxSizeMb = _controlPanel?.ActiveMaxFileSizeMb ?? 0;
+
+        if (maxRes == 0 && maxSizeMb == 0)
+            return formats;
+
+        var maxSizeBytes = maxSizeMb > 0 ? (long)maxSizeMb * 1024 * 1024 : 0;
+
+        return formats.Where(f =>
+        {
+            // Filter by resolution: exclude video formats that exceed max height
+            if (maxRes > 0 && f.Height.HasValue && f.Height.Value > maxRes)
+                return false;
+
+            // Filter by file size: exclude formats that exceed max size
+            if (maxSizeBytes > 0)
+            {
+                var size = f.FileSize ?? f.ApproximateFileSize ?? 0;
+                if (size > 0 && size > maxSizeBytes)
+                    return false;
+            }
+
+            return true;
+        }).ToList();
     }
 }

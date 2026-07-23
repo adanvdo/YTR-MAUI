@@ -1,5 +1,5 @@
 ; YTR Inno Setup Script
-; Requires Inno Setup 6.x — https://jrsoftware.org/isinfo.php
+; Requires Inno Setup 7.x — https://jrsoftware.org/isinfo.php
 
 #define MyAppName "YTR"
 ; Patched automatically by publish-windows.bat from Directory.Build.props
@@ -51,7 +51,7 @@ Source: "tools\ffprobe.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversio
 Source: "tools\node.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\App\appicon.ico"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 

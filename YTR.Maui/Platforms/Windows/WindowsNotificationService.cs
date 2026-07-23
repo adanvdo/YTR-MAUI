@@ -9,10 +9,13 @@ namespace YTR.Maui.Platforms.Windows;
 /// </summary>
 public sealed class WindowsNotificationService : INotificationService
 {
+    private static readonly Uri AppIconUri = new(Path.Combine(AppContext.BaseDirectory, "Resources", "App", "appicon.png"));
+
     public Task ShowDownloadCompleteAsync(string title, string filePath)
     {
         var fileName = Path.GetFileName(filePath);
         new ToastContentBuilder()
+            .AddAppLogoOverride(AppIconUri)
             .AddText("Download Complete")
             .AddText($"{title}")
             .AddText(fileName)
@@ -23,6 +26,7 @@ public sealed class WindowsNotificationService : INotificationService
     public Task ShowErrorAsync(string title, string message)
     {
         new ToastContentBuilder()
+            .AddAppLogoOverride(AppIconUri)
             .AddText($"Error: {title}")
             .AddText(message)
             .Show();
@@ -32,6 +36,7 @@ public sealed class WindowsNotificationService : INotificationService
     public Task ShowStatusAsync(string message)
     {
         new ToastContentBuilder()
+            .AddAppLogoOverride(AppIconUri)
             .AddText("YTR")
             .AddText(message)
             .Show();

@@ -29,6 +29,18 @@ public partial class App : Application
     [DllImport("user32.dll")]
     private static extern nint CallWindowProc(nint lpPrevWndFunc, nint hWnd, uint msg, nint wParam, nint lParam);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint LoadImage(int hInstance, string lpszName, int uType, int cxDesired, int cyDesired, int fuLoad);
+
+    [DllImport("user32.dll")]
+    private static extern nint SendMessage(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    private const int IMAGE_ICON = 1;
+    private const int LR_LOADFROMFILE = 0x0010;
+    private const uint WM_SETICON = 0x0080;
+    private const nint ICON_SMALL = 0;
+    private const nint ICON_BIG = 1;
+
     private delegate nint WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
 
     private const int GWL_WNDPROC = -4;
@@ -152,6 +164,17 @@ public partial class App : Application
             if (nativeWindow is not null)
             {
                 _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
+
+                // Set the window icon (taskbar + title bar)
+                var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "App", "appicon.ico");
+                if (File.Exists(iconPath))
+                {
+                    var hIconSmall = LoadImage(0, iconPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);
+                    var hIconBig = LoadImage(0, iconPath, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
+                    if (hIconSmall != 0) SendMessage(_hwnd, WM_SETICON, ICON_SMALL, hIconSmall);
+                    if (hIconBig != 0) SendMessage(_hwnd, WM_SETICON, ICON_BIG, hIconBig);
+                }
+
                 _wndProcDelegate = new WndProcDelegate(WndProc);
                 _originalWndProc = SetWindowLongPtr(_hwnd, GWL_WNDPROC,
                     Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));

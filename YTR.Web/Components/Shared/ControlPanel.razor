@@ -30,6 +30,7 @@
                             @if (!_segmentExpanded && _segmentEnabled && SegmentHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                                <MudText Typo="Typo.caption" Color="Color.Primary">@SegmentSummary</MudText>
                             }
                         </MudStack>
                     </TitleContent>
@@ -54,6 +55,7 @@
                             @if (!_cropExpanded && _cropEnabled && CropHasValues)
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                                <MudText Typo="Typo.caption" Color="Color.Primary">@CropSummary</MudText>
                             }
                         </MudStack>
                     </TitleContent>
@@ -80,14 +82,38 @@
                 </MudExpansionPanel>
 
                 @* Convert panel *@
-                <MudExpansionPanel @bind-Expanded="_convertExpanded" Dense="true">
+                <MudExpansionPanel @bind-Expanded="_convertExpanded" Dense="true"
+                                  Style="@(_convertFlashing && _convertExpanded ? "animation: flash-border 0.5s ease-in-out 3; border: 2px solid transparent; border-radius: 4px;" : "")">
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                             <MudText Typo="Typo.body2">Convert</MudText>
                             @if (!_convertExpanded && ConvertHasValues)
                             {
-                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
-                                         Color="@(_alwaysConvert ? Color.Warning : Color.Primary)" />
+                                @if (_convertFlashing)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                                             Style="@($"color: var(--mud-palette-{ConvertColorVar}); animation: flash-to-red 0.5s ease-in-out 3 forwards;")" />
+                                    <MudText Typo="Typo.caption"
+                                             Style="@($"color: var(--mud-palette-{ConvertColorVar}); animation: flash-to-red 0.5s ease-in-out 3 forwards;")">@ConvertSummary</MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                                             Color="@(ConvertIndicatorColor)" />
+                                    <MudText Typo="Typo.caption"
+                                             Color="@(ConvertIndicatorColor)">@ConvertSummary</MudText>
+                                }
+                            }
+                            @if (_convertFlashing && _convertExpanded)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Error"
+                                         Style="animation: blink-warning 0.5s ease-in-out 3;" />
+                                <MudText Typo="Typo.caption" Color="Color.Error">will apply to current url</MudText>
+                            }
+                            @if (_convertWarned && _convertExpanded && !_convertFlashing)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Error" />
+                                <MudText Typo="Typo.caption" Color="Color.Error">will apply to current url</MudText>
                             }
                         </MudStack>
                     </TitleContent>
@@ -99,16 +125,20 @@
                                     Locked to preferred formats (Settings)
                                 </MudText>
                             }
-                            <MudSelect @bind-Value="_convertVideo" Label="Video" Variant="Variant.Outlined"
-                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense">
+                            <MudSelect @bind-Value="_convertVideo" @bind-Value:after="OnConvertValueChanged"
+                                       Label="Video" Variant="Variant.Outlined"
+                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense"
+                                       Class="@(_convertWarned && _convertVideo != VideoFormat.Unspecified ? "cp-highlight" : "")">
                                 <MudSelectItem Value="VideoFormat.Unspecified">None</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Mp4">MP4</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Mkv">MKV</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Webm">WebM</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Gif">GIF</MudSelectItem>
                             </MudSelect>
-                            <MudSelect @bind-Value="_convertAudio" Label="Audio" Variant="Variant.Outlined"
-                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense">
+                            <MudSelect @bind-Value="_convertAudio" @bind-Value:after="OnConvertValueChanged"
+                                       Label="Audio" Variant="Variant.Outlined"
+                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense"
+                                       Class="@(_convertWarned && _convertAudio != AudioFormat.Unspecified ? "cp-highlight" : "")">
                                 <MudSelectItem Value="AudioFormat.Unspecified">None</MudSelectItem>
                                 <MudSelectItem Value="AudioFormat.Mp3">MP3</MudSelectItem>
                                 <MudSelectItem Value="AudioFormat.Aac">AAC</MudSelectItem>
@@ -120,33 +150,69 @@
                 </MudExpansionPanel>
 
                 @* Limits panel *@
-                <MudExpansionPanel @bind-Expanded="_limitsExpanded" Dense="true">
+                <MudExpansionPanel @bind-Expanded="_limitsExpanded" Dense="true"
+                                  Style="@(_limitsFlashing && _limitsExpanded ? "animation: flash-border 0.5s ease-in-out 3; border: 2px solid transparent; border-radius: 4px;" : "")">
                     <TitleContent>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                             <MudText Typo="Typo.body2">Limits</MudText>
                             @if (!_limitsExpanded && LimitsHasValues)
                             {
-                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Primary" />
+                                @if (_limitsFlashing)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                                             Style="@($"color: var(--mud-palette-{LimitsColorVar}); animation: flash-to-red 0.5s ease-in-out 3 forwards;")" />
+                                    <MudText Typo="Typo.caption"
+                                             Style="@($"color: var(--mud-palette-{LimitsColorVar}); animation: flash-to-red 0.5s ease-in-out 3 forwards;")">@LimitsSummary</MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                                             Color="@(LimitsIndicatorColor)" />
+                                    <MudText Typo="Typo.caption"
+                                             Color="@(LimitsIndicatorColor)">@LimitsSummary</MudText>
+                                }
+                            }
+                            @if (_limitsFlashing && _limitsExpanded)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Error"
+                                         Style="animation: blink-warning 0.5s ease-in-out 3;" />
+                                <MudText Typo="Typo.caption" Color="Color.Error">will apply to current url</MudText>
+                            }
+                            @if (_limitsWarned && _limitsExpanded && !_limitsFlashing)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="Color.Error" />
+                                <MudText Typo="Typo.caption" Color="Color.Error">will apply to current url</MudText>
                             }
                         </MudStack>
                     </TitleContent>
                     <ChildContent>
                         <MudStack Spacing="1" Class="cp-panel-limits">
+                            @if (_limitsLocked)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Warning">
+                                    Locked to enforced restrictions (Settings)
+                                </MudText>
+                            }
                             @if (ShowDownloadSelected)
                             {
                                 <MudText Typo="Typo.caption" Color="Color.Tertiary">
                                     Disabled — using selected format
                                 </MudText>
                             }
-                            <MudSelect @bind-Value="_maxResolution" Label="Max Resolution" Variant="Variant.Outlined"
-                                       Dense="true" Margin="Margin.Dense" Disabled="ShowDownloadSelected">
+                            <MudSelect @bind-Value="_maxResolution" @bind-Value:after="OnLimitsValueChanged"
+                                       Label="Max Resolution" Variant="Variant.Outlined"
+                                       Dense="true" Margin="Margin.Dense" Disabled="ShowDownloadSelected || _limitsLocked"
+                                       Class="@(_limitsWarned && _maxResolution != Resolution.Any ? "cp-highlight" : "")">
                                 @foreach (var res in Enum.GetValues<Resolution>())
                                 {
                                     <MudSelectItem Value="res">@res</MudSelectItem>
                                 }
                             </MudSelect>
-                            <MudNumericField @bind-Value="_maxFileSize" Label="Max Size (MB, 0 = no limit)"
-                                             Variant="Variant.Outlined" Min="0" Dense="true" Margin="Margin.Dense" Disabled="ShowDownloadSelected" OnFocus="SelectAllText" />
+                            <MudNumericField @bind-Value="_maxFileSize" @bind-Value:after="OnLimitsValueChanged"
+                                             Label="Max Size (MB, 0 = no limit)"
+                                             Variant="Variant.Outlined" Min="0" Dense="true" Margin="Margin.Dense"
+                                             Disabled="ShowDownloadSelected || _limitsLocked" OnFocus="SelectAllText"
+                                             Class="@(_limitsWarned && _maxFileSize > 0 ? "cp-highlight" : "")" />
                         </MudStack>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -207,11 +273,28 @@
     private AudioFormat _convertAudio = AudioFormat.Unspecified;
     private bool _convertExpanded;
     private bool _alwaysConvert;
+    private bool _convertFlashing;
 
     // Limits
     private Resolution _maxResolution = Resolution.Any;
     private int _maxFileSize;
     private bool _limitsExpanded;
+    private bool _limitsLocked;
+    private bool _limitsFlashing;
+
+    // After flashing ends, circle/text stay red until next action
+    private bool _convertWarned;
+    private bool _limitsWarned;
+
+    private Color ConvertIndicatorColor =>
+        _convertWarned ? Color.Error : (_alwaysConvert ? Color.Warning : Color.Primary);
+
+    private Color LimitsIndicatorColor =>
+        _limitsWarned ? Color.Error : (_limitsLocked ? Color.Warning : Color.Primary);
+
+    // CSS variable names for use in inline styles during flash animation
+    private string ConvertColorVar => _alwaysConvert ? "warning" : "primary";
+    private string LimitsColorVar => _limitsLocked ? "warning" : "primary";
 
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public bool ShowDownloadSelected { get; set; }
@@ -222,6 +305,24 @@
     [Parameter] public EventCallback<DownloadRequest> OnDownloadVideo { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadAudio { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadBest { get; set; }
+    [Parameter] public EventCallback<bool> HasOptionsChanged { get; set; }
+
+    /// <summary>
+    /// The currently configured max resolution in pixels (0 = no limit).
+    /// </summary>
+    public int ActiveMaxResolutionPixels => _maxResolution switch
+    {
+        Resolution.Sd => 480,
+        Resolution.Hd720 => 720,
+        Resolution.Hd1080 => 1080,
+        Resolution.Uhd2160 => 2160,
+        _ => 0
+    };
+
+    /// <summary>
+    /// The currently configured max file size in MB (0 = no limit).
+    /// </summary>
+    public int ActiveMaxFileSizeMb => _maxFileSize;
 
     private string? _thumbnailUrl => ThumbnailUrl;
 
@@ -230,6 +331,109 @@
     private bool CropHasValues => _cropEnabled && ((_cropTop ?? 0) > 0 || (_cropBottom ?? 0) > 0 || (_cropLeft ?? 0) > 0 || (_cropRight ?? 0) > 0);
     private bool ConvertHasValues => _convertVideo != VideoFormat.Unspecified || _convertAudio != AudioFormat.Unspecified;
     private bool LimitsHasValues => _maxResolution != Resolution.Any || _maxFileSize > 0;
+
+    // Collapsed panel summaries
+    private string SegmentSummary
+    {
+        get
+        {
+            var start = _segmentStart?.ToString(@"h\:mm\:ss") ?? "0:00:00";
+            if (_segmentEnd.HasValue)
+            {
+                var endLabel = _segmentEndMode == SegmentMode.Duration ? "+" : "→";
+                return $"{start} {endLabel} {_segmentEnd.Value:h\\:mm\\:ss}";
+            }
+            return $"{start} → end";
+        }
+    }
+
+    private string CropSummary
+    {
+        get
+        {
+            var parts = new List<string>();
+            if ((_cropTop ?? 0) > 0) parts.Add($"T:{_cropTop}");
+            if ((_cropBottom ?? 0) > 0) parts.Add($"B:{_cropBottom}");
+            if ((_cropLeft ?? 0) > 0) parts.Add($"L:{_cropLeft}");
+            if ((_cropRight ?? 0) > 0) parts.Add($"R:{_cropRight}");
+            return string.Join(" ", parts);
+        }
+    }
+
+    private string ConvertSummary
+    {
+        get
+        {
+            if (_alwaysConvert)
+                return $"Locked to {_convertVideo} / {_convertAudio}";
+
+            var parts = new List<string>();
+            if (_convertVideo != VideoFormat.Unspecified) parts.Add(_convertVideo.ToString());
+            if (_convertAudio != AudioFormat.Unspecified) parts.Add(_convertAudio.ToString());
+            return string.Join(" / ", parts);
+        }
+    }
+
+    private string LimitsSummary
+    {
+        get
+        {
+            if (_limitsLocked)
+            {
+                var res = _maxResolution != Resolution.Any ? _maxResolution.ToString() : "Any";
+                var size = _maxFileSize > 0 ? $"{_maxFileSize} MB" : "Any";
+                return $"Locked to {res} / {size}";
+            }
+
+            var parts = new List<string>();
+            if (_maxResolution != Resolution.Any) parts.Add($"Max {_maxResolution}");
+            if (_maxFileSize > 0) parts.Add($"{_maxFileSize} MB");
+            return string.Join(", ", parts);
+        }
+    }
+
+    /// <summary>
+    /// True if the user has set any non-default download options,
+    /// excluding convert when it's locked to preferred formats
+    /// and limits when locked to enforced restrictions.
+    /// </summary>
+    private bool HasNonDefaultOptions =>
+        (_segmentEnabled && SegmentHasValues) ||
+        (_cropEnabled && CropHasValues) ||
+        (!_alwaysConvert && ConvertHasValues) ||
+        (!_limitsLocked && LimitsHasValues);
+
+    private bool _lastNotifiedHasOptions;
+
+    private async Task NotifyOptionsChanged()
+    {
+        var current = HasNonDefaultOptions;
+        if (current != _lastNotifiedHasOptions)
+        {
+            _lastNotifiedHasOptions = current;
+            await HasOptionsChanged.InvokeAsync(current);
+        }
+    }
+
+    private void OnConvertValueChanged()
+    {
+        // Clear warned state if all convert values are back to default
+        if (_convertWarned && !ConvertHasValues)
+        {
+            _convertWarned = false;
+            _convertFlashing = false;
+        }
+    }
+
+    private void OnLimitsValueChanged()
+    {
+        // Clear warned state if all limits values are back to default
+        if (_limitsWarned && !LimitsHasValues)
+        {
+            _limitsWarned = false;
+            _limitsFlashing = false;
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -249,10 +453,16 @@
         // Apply enforced restrictions
         if (Settings.Restrictions.EnforceRestrictions)
         {
+            _limitsLocked = true;
             _maxResolution = Settings.Restrictions.MaxResolution;
             _maxFileSize = Settings.Restrictions.MaxFileSizeMb;
             if (LimitsHasValues) _limitsExpanded = true;
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await NotifyOptionsChanged();
     }
 
     private void OnStateChanged()
@@ -263,6 +473,93 @@
     public void Dispose()
     {
         State.OnStateChanged -= OnStateChanged;
+    }
+
+    /// <summary>
+    /// Resets all download options to defaults, except those locked to settings.
+    /// </summary>
+    public void ResetOptions()
+    {
+        // Segment
+        _segmentStart = null;
+        _segmentEnd = null;
+        _segmentEnabled = false;
+        _segmentExpanded = false;
+
+        // Crop
+        _cropTop = null;
+        _cropBottom = null;
+        _cropLeft = null;
+        _cropRight = null;
+        _cropEnabled = false;
+        _cropExpanded = false;
+
+        // Convert — only reset if not locked to preferred formats
+        if (!_alwaysConvert)
+        {
+            _convertVideo = VideoFormat.Unspecified;
+            _convertAudio = AudioFormat.Unspecified;
+            _convertExpanded = false;
+        }
+
+        // Limits — only reset if not enforced by restrictions
+        if (!_limitsLocked)
+        {
+            _maxResolution = Resolution.Any;
+            _maxFileSize = 0;
+            _limitsExpanded = false;
+        }
+
+        _convertFlashing = false;
+        _limitsFlashing = false;
+        _convertWarned = false;
+        _limitsWarned = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Called when the URL input changes. Resets segment/crop and flashes
+    /// a warning on convert/limits if they have non-default, non-locked values.
+    /// </summary>
+    public async Task OnUrlChangedAsync()
+    {
+        // Reset segment and crop (media-specific options)
+        _segmentStart = null;
+        _segmentEnd = null;
+        _segmentEnabled = false;
+        _segmentExpanded = false;
+
+        _cropTop = null;
+        _cropBottom = null;
+        _cropLeft = null;
+        _cropRight = null;
+        _cropEnabled = false;
+        _cropExpanded = false;
+
+        // Flash convert if it has user-set values (not locked)
+        if (!_alwaysConvert && ConvertHasValues)
+        {
+            _convertFlashing = true;
+        }
+
+        // Flash limits if it has user-set values (not locked)
+        if (!_limitsLocked && LimitsHasValues)
+        {
+            _limitsFlashing = true;
+        }
+
+        StateHasChanged();
+
+        // Stop flashing after the animation completes and leave indicator red
+        if (_convertFlashing || _limitsFlashing)
+        {
+            await Task.Delay(1500);
+            if (_convertFlashing) _convertWarned = true;
+            if (_limitsFlashing) _limitsWarned = true;
+            _convertFlashing = false;
+            _limitsFlashing = false;
+            StateHasChanged();
+        }
     }
 
     private string FormatSelectionText
