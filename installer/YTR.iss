@@ -6,7 +6,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "JAMGALACTIC"
 #define MyAppURL "https://jamgalactic.com"
-#define MyAppExeName "YTR.Maui.exe"
+#define MyAppExeName "YTR.exe"
 #define PublishDir "..\publish\win-x64"
 
 [Setup]
@@ -72,7 +72,6 @@ function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
 begin
-  // Attempt to close any running instance gracefully
   Exec('taskkill', '/f /im {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Result := True;
 end;
