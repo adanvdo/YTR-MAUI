@@ -38,3 +38,4 @@ publish-windows.bat
 .kiro/
 /.kiro/*
 /release-windows.ps1
+/.vscode/*

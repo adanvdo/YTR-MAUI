@@ -186,12 +186,20 @@ public partial class App : Application
 
     private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
+        // Intercept close (X button) → save state and exit cleanly
+        if (msg == WM_CLOSE && !_isExiting)
+        {
+            _isExiting = true;
+            SaveWindowState(_mainWindow!);
+            Current?.Quit();
+            return 0;
+        }
+
         // Intercept minimize → hide window to tray (but not when exiting)
         if (msg == WM_SYSCOMMAND && (wParam & 0xFFF0) == SC_MINIMIZE && !_isExiting)
         {
             ShowWindow(hWnd, SW_HIDE);
 
-            // Show a one-time notification on first minimize to tray
             if (!_hasMinimizedOnce)
             {
                 _hasMinimizedOnce = true;
