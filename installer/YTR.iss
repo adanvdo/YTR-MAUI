@@ -30,7 +30,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Uncomment and set path when you have an .ico file:
-SetupIconFile=..\YTR.Core\Resources\AppIcon\appicon.ico
+SetupIconFile=..\YTR.Core\Resources\appicon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
