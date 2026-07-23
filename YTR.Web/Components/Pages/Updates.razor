@@ -147,7 +147,7 @@
     private static string GetCurrentVersion()
     {
         var asm = System.Reflection.Assembly.GetEntryAssembly();
-        return asm?.GetName().Version?.ToString(3) ?? "0.0.0";
+        return asm?.GetName().Version?.ToString(4) ?? "0.0.0.0";
     }
 
     private async Task CheckForAppUpdate()

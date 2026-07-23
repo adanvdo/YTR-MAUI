@@ -74,10 +74,16 @@ public sealed class WindowsPlatformService : IPlatformService
 
     private static string FindExecutable(string baseDir, string fileName)
     {
-        // Check AppData first (updated by in-app updater)
-        var appDataPath = Path.Combine(FileSystem.AppDataDirectory, fileName);
-        if (File.Exists(appDataPath))
-            return appDataPath;
+        // Candidate paths in priority order (highest priority first).
+        // We'll resolve the actual newest version among all found candidates.
+        string? appDataPath = null;
+        string? bundledPath = null;
+        string? systemPath = null;
+
+        // 1. Check AppData (updated by in-app updater)
+        var appDataCandidate = Path.Combine(FileSystem.AppDataDirectory, fileName);
+        if (File.Exists(appDataCandidate))
+            appDataPath = appDataCandidate;
 
 #if DEBUG
         // In debug, use installer/tools/ from the repo so we don't need copies in Resources/App
@@ -88,14 +94,72 @@ public sealed class WindowsPlatformService : IPlatformService
             {
                 var devToolPath = Path.Combine(dir.FullName, "installer", "tools", fileName);
                 if (File.Exists(devToolPath))
-                    return devToolPath;
+                    bundledPath = devToolPath;
                 break;
             }
             dir = dir.Parent;
         }
 #endif
 
-        var resourcePath = Path.Combine(baseDir, fileName);
-        return resourcePath;
+        // 2. Bundled in Resources/App (placed by installer)
+        if (bundledPath is null)
+        {
+            var resourceCandidate = Path.Combine(baseDir, fileName);
+            if (File.Exists(resourceCandidate))
+                bundledPath = resourceCandidate;
+        }
+
+        // 3. Check system PATH for a user-installed version
+        systemPath = FindOnPath(fileName);
+
+        // Determine best candidate: pick the newest version among all found paths.
+        // If version comparison fails or is unavailable, prefer AppData > bundled > system.
+        var bestPath = PickNewest(fileName, appDataPath, bundledPath, systemPath);
+        if (bestPath is not null)
+            return bestPath;
+
+        // Fallback: return bundled path even if file doesn't exist (caller will handle)
+        return Path.Combine(baseDir, fileName);
+    }
+
+    /// <summary>
+    /// Searches the system PATH for the given executable.
+    /// </summary>
+    private static string? FindOnPath(string fileName)
+    {
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathEnv))
+            return null;
+
+        foreach (var directory in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(directory.Trim(), fileName);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Picks the newest tool version among the candidate paths by comparing file modification dates.
+    /// For tools that are frequently updated (yt-dlp, ffmpeg), the newest file is almost always the newest version.
+    /// </summary>
+    private static string? PickNewest(string fileName, string? appDataPath, string? bundledPath, string? systemPath)
+    {
+        var candidates = new List<(string Path, DateTime Modified)>();
+
+        if (appDataPath is not null)
+            candidates.Add((appDataPath, File.GetLastWriteTimeUtc(appDataPath)));
+        if (bundledPath is not null)
+            candidates.Add((bundledPath, File.GetLastWriteTimeUtc(bundledPath)));
+        if (systemPath is not null)
+            candidates.Add((systemPath, File.GetLastWriteTimeUtc(systemPath)));
+
+        if (candidates.Count == 0)
+            return null;
+
+        // Return the candidate with the most recent modification time
+        return candidates.OrderByDescending(c => c.Modified).First().Path;
     }
 }

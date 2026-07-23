@@ -66,17 +66,20 @@ public sealed class AppStartup
     private readonly IDbContextFactory<YtrDbContext> _dbFactory;
     private readonly IMigrationService _migration;
     private readonly ISettingsService _settings;
+    private readonly IToolVersionService _toolVersionService;
     private readonly ILogger<AppStartup> _logger;
 
     public AppStartup(
         IDbContextFactory<YtrDbContext> dbFactory,
         IMigrationService migration,
         ISettingsService settings,
+        IToolVersionService toolVersionService,
         ILogger<AppStartup> logger)
     {
         _dbFactory = dbFactory;
         _migration = migration;
         _settings = settings;
+        _toolVersionService = toolVersionService;
         _logger = logger;
     }
 
@@ -105,5 +108,8 @@ public sealed class AppStartup
 
         // Load settings
         await _settings.LoadAsync();
+
+        // Detect actual tool versions from binaries (updates stored versions if stale)
+        await _toolVersionService.DetectVersionsAsync();
     }
 }

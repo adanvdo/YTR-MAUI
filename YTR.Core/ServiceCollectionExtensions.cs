@@ -36,6 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDownloadOrchestrator, DownloadOrchestrator>();
         services.AddScoped<IAppUpdateService, AppUpdateService>();
         services.AddScoped<IDependencyUpdateService, DependencyUpdateService>();
+        services.AddSingleton<IToolVersionService, ToolVersionService>();
 
         // Options (bound from ISettingsService after load)
         services.AddOptions<DownloadOptions>()

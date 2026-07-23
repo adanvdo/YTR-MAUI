@@ -237,6 +237,6 @@ public sealed class AppUpdateService : IAppUpdateService
     private static Version GetCurrentVersion()
     {
         var asm = System.Reflection.Assembly.GetEntryAssembly();
-        return asm?.GetName().Version ?? new Version(0, 0, 0);
+        return asm?.GetName().Version ?? new Version(0, 0, 0, 0);
     }
 }
