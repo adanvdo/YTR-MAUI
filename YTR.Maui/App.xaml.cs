@@ -223,10 +223,11 @@ public partial class App : Application
         // Save window state once
         SaveWindowState(_mainWindow!);
 
-        // Dispose tray and hotkey services to release their background threads
+        // Kill any active child processes (ffmpeg, yt-dlp, node, etc.)
         var services = Handler?.MauiContext?.Services;
         if (services is not null)
         {
+            services.GetService<IProcessRunner>()?.KillAll();
             (services.GetService<ITrayService>() as IDisposable)?.Dispose();
             (services.GetService<IHotkeyService>() as IDisposable)?.Dispose();
         }

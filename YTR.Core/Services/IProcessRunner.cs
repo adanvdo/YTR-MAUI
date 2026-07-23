@@ -8,4 +8,9 @@ namespace YTR.Core.Services;
 public interface IProcessRunner
 {
     Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Kills all currently running child processes spawned by this runner.
+    /// </summary>
+    void KillAll();
 }

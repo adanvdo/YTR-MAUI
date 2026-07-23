@@ -16,6 +16,14 @@ public partial class App : MauiWinUIApplication
 	/// </summary>
 	public App()
 	{
+		// Redirect WebView2 user data folder BEFORE anything else initializes.
+		// WebView2 defaults to writing next to the exe, which fails in read-only
+		// install locations (Program Files). The env var must be set before the
+		// WebView2 environment is created — this is the earliest possible point.
+		Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER",
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				"YTR", "WebView2"));
+
 		this.InitializeComponent();
 	}
 

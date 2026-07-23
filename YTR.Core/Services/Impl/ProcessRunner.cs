@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -7,14 +8,33 @@ namespace YTR.Core.Services.Impl;
 
 /// <summary>
 /// Executes external processes (yt-dlp, ffmpeg) with output capture and cancellation support.
+/// Tracks active processes so they can be killed on app shutdown.
 /// </summary>
 public sealed class ProcessRunner : IProcessRunner
 {
     private readonly ILogger<ProcessRunner> _logger;
+    private readonly ConcurrentDictionary<int, Process> _activeProcesses = new();
 
     public ProcessRunner(ILogger<ProcessRunner> logger)
     {
         _logger = logger;
+    }
+
+    public void KillAll()
+    {
+        foreach (var kvp in _activeProcesses)
+        {
+            try
+            {
+                if (!kvp.Value.HasExited)
+                    kvp.Value.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Process may have already exited
+            }
+        }
+        _activeProcesses.Clear();
     }
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
@@ -53,6 +73,8 @@ public sealed class ProcessRunner : IProcessRunner
         try
         {
             process.Start();
+            _activeProcesses.TryAdd(process.Id, process);
+
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
@@ -100,6 +122,10 @@ public sealed class ProcessRunner : IProcessRunner
                 StandardError = ex.Message,
                 WasCancelled = false
             };
+        }
+        finally
+        {
+            _activeProcesses.TryRemove(process.Id, out _);
         }
     }
 }

@@ -64,15 +64,36 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Clean up app data on uninstall (optional — user can keep their data)
-; Type: filesandordirs; Name: "{localappdata}\YTR"
+; Clean up WebView2 cache, database, settings, and logs on uninstall
+Type: filesandordirs; Name: "{localappdata}\YTR"
 
 [Code]
-// Kill running instance before install/upgrade
-function InitializeSetup(): Boolean;
+// Kill processes whose executable lives under the given directory.
+// Uses WMIC to filter by path so we don't kill unrelated ffmpeg/node/etc.
+procedure KillAppProcesses(AppDir: String);
 var
   ResultCode: Integer;
+  EscapedDir: String;
 begin
+  // WMIC WHERE clause uses backslash-escaped paths
+  EscapedDir := AppDir;
+  StringChangeEx(EscapedDir, '\', '\\', True);
+
   Exec('taskkill', '/f /im {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('wmic', 'process where "ExecutablePath like ''' + EscapedDir + '\\%''" delete', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // WebView2 child processes are spawned from the user data folder, not the app dir
+  Exec('taskkill', '/f /im msedgewebview2.exe /fi "MODULES eq WebView2Loader.dll"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  KillAppProcesses(ExpandConstant('{autopf}\{#MyAppName}'));
+  Result := True;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  KillAppProcesses(ExpandConstant('{app}'));
   Result := True;
 end;
