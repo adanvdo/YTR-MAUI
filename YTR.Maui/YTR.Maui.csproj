@@ -85,23 +85,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Resources\App\" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Update="Resources\App\ffmpeg.exe">
+      <None Update="Resources\AppIcon\appicon.ico">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
-      <None Update="Resources\App\ffprobe.exe">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-      <None Update="Resources\App\yt-dlp.exe">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-      <None Update="Resources\App\appicon.ico">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-      <None Update="Resources\App\appicon.png">
+      <None Update="Resources\AppIcon\appicon.png">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
     </ItemGroup>

@@ -166,7 +166,7 @@ public partial class App : Application
                 _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
 
                 // Set the window icon (taskbar + title bar)
-                var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "App", "appicon.ico");
+                var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "AppIcon", "appicon.ico");
                 if (File.Exists(iconPath))
                 {
                     var hIconSmall = LoadImage(0, iconPath, IMAGE_ICON, 16, 16, LR_LOADFROMFILE);

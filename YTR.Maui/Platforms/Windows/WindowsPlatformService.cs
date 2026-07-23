@@ -22,17 +22,17 @@ public sealed class WindowsPlatformService : IPlatformService
 
     public string GetResourcePath(string resourceName)
     {
-        // Resources are bundled in the app's resource directory
+        // Bundled tools are placed in Resources\App by the installer
         var appDir = AppContext.BaseDirectory;
-        var resourcesDir = Path.Combine(appDir, "Resources", "App");
+        var toolsDir = Path.Combine(appDir, "Resources", "App");
 
         return resourceName.ToLowerInvariant() switch
         {
-            "yt-dlp" or "ytdlp" => FindExecutable(resourcesDir, "yt-dlp.exe"),
-            "ffmpeg" => FindExecutable(resourcesDir, "ffmpeg.exe"),
-            "ffprobe" => FindExecutable(resourcesDir, "ffprobe.exe"),
-            "node" or "nodejs" => FindExecutable(resourcesDir, "node.exe"),
-            _ => Path.Combine(resourcesDir, resourceName)
+            "yt-dlp" or "ytdlp" => FindExecutable(toolsDir, "yt-dlp.exe"),
+            "ffmpeg" => FindExecutable(toolsDir, "ffmpeg.exe"),
+            "ffprobe" => FindExecutable(toolsDir, "ffprobe.exe"),
+            "node" or "nodejs" => FindExecutable(toolsDir, "node.exe"),
+            _ => Path.Combine(toolsDir, resourceName)
         };
     }
 
@@ -74,11 +74,28 @@ public sealed class WindowsPlatformService : IPlatformService
 
     private static string FindExecutable(string baseDir, string fileName)
     {
+        // Check AppData first (updated by in-app updater)
         var appDataPath = Path.Combine(FileSystem.AppDataDirectory, fileName);
         if (File.Exists(appDataPath))
             return appDataPath;
 
-        var resourcePath = Path.Combine(baseDir, fileName);        
+#if DEBUG
+        // In debug, use installer/tools/ from the repo so we don't need copies in Resources/App
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Directory.Build.props")))
+            {
+                var devToolPath = Path.Combine(dir.FullName, "installer", "tools", fileName);
+                if (File.Exists(devToolPath))
+                    return devToolPath;
+                break;
+            }
+            dir = dir.Parent;
+        }
+#endif
+
+        var resourcePath = Path.Combine(baseDir, fileName);
         return resourcePath;
     }
 }

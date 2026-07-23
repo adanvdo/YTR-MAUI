@@ -9,7 +9,7 @@ namespace YTR.Maui.Platforms.Windows;
 /// </summary>
 public sealed class WindowsNotificationService : INotificationService
 {
-    private static readonly Uri AppIconUri = new(Path.Combine(AppContext.BaseDirectory, "Resources", "App", "appicon.png"));
+    private static readonly Uri AppIconUri = new(Path.Combine(AppContext.BaseDirectory, "Resources", "AppIcon", "appicon.png"));
 
     public Task ShowDownloadCompleteAsync(string title, string filePath)
     {
