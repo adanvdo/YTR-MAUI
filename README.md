@@ -42,7 +42,7 @@ YTR is a fast, feature-rich app for downloading media from popular platforms. Av
 ### Windows
 
 - Windows 10 (version 1903 or later), 64-bit
-- ~150 MB disk space (including bundled tools)
+- ~530 MB disk space (including bundled tools)
 - Internet connection for downloading media
 
 ### Android
