@@ -33,3 +33,7 @@ installer/tools/*.exe
 /YTR.Maui/Resources/App/node.exe
 
 publish-windows.bat
+
+## IDE files
+.kiro/
+/.kiro/*
