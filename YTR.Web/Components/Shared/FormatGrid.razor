@@ -55,7 +55,7 @@
                         <MudPaper Class="d-flex align-center gap-1 pl-1 pr-1 pt-0 pb-0 px-2" Elevation="0" Style="background: var(--mud-palette-primary); color: white; border-radius: 16px; height: 26px;">
                             <MudIcon Icon="@chipIcon" Size="Size.Small" />
                             <MudText Typo="Typo.caption" Style="line-height: 26px;">@(_selectedVideo.Format ?? _selectedVideo.FormatId)</MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearVideo" Style="color: white; padding: 2px;" Title="Clear video selection" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearVideo" Style="color: white; padding: 2px;" title="Clear video selection" />
                         </MudPaper>
                     }
                     @if (_selectedAudio is not null)
@@ -63,7 +63,7 @@
                         <MudPaper Class="d-flex align-center gap-1 pl-1 pr-1 pt-0 pb-0 px-2" Elevation="0" Style="background: var(--mud-palette-secondary); color: white; border-radius: 16px; height: 26px;">
                             <MudIcon Icon="@Icons.Material.Filled.AudioFile" Size="Size.Small" />
                             <MudText Typo="Typo.caption" Style="line-height: 26px;">@(_selectedAudio.Format ?? _selectedAudio.FormatId)</MudText>
-                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearAudio" Style="color: white; padding: 2px;" Title="Clear audio selection" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ClearAudio" Style="color: white; padding: 2px;" title="Clear audio selection" />
                         </MudPaper>
                     }
                 </MudStack>
@@ -76,7 +76,7 @@
                      FixedHeader="true"
                      RowClassFunc="RowClassFunc" Class="format-grid format-grid-scroll">
             <Columns>
-                <TemplateColumn Title="" Width="30px" Sortable="false">
+                <TemplateColumn Title="" HeaderStyle="width:30px;" CellStyle="width:30px;" Sortable="false">
                     <CellTemplate>
                         @{
                             var icon = GetRowIcon(context.Item);

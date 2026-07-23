@@ -72,10 +72,10 @@
                                 </MudButton>
                             }
                             <MudGrid Spacing="1">
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" Dense="true" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" OnFocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
                             </MudGrid>
                         </MudStack>
                     </ChildContent>
@@ -127,7 +127,7 @@
                             }
                             <MudSelect @bind-Value="_convertVideo" @bind-Value:after="OnConvertValueChanged"
                                        Label="Video" Variant="Variant.Outlined"
-                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense"
+                                       Disabled="_alwaysConvert" Margin="Margin.Dense"
                                        Class="@(_convertWarned && _convertVideo != VideoFormat.Unspecified ? "cp-highlight" : "")">
                                 <MudSelectItem Value="VideoFormat.Unspecified">None</MudSelectItem>
                                 <MudSelectItem Value="VideoFormat.Mp4">MP4</MudSelectItem>
@@ -137,7 +137,7 @@
                             </MudSelect>
                             <MudSelect @bind-Value="_convertAudio" @bind-Value:after="OnConvertValueChanged"
                                        Label="Audio" Variant="Variant.Outlined"
-                                       Disabled="_alwaysConvert" Dense="true" Margin="Margin.Dense"
+                                       Disabled="_alwaysConvert" Margin="Margin.Dense"
                                        Class="@(_convertWarned && _convertAudio != AudioFormat.Unspecified ? "cp-highlight" : "")">
                                 <MudSelectItem Value="AudioFormat.Unspecified">None</MudSelectItem>
                                 <MudSelectItem Value="AudioFormat.Mp3">MP3</MudSelectItem>
@@ -201,7 +201,7 @@
                             }
                             <MudSelect @bind-Value="_maxResolution" @bind-Value:after="OnLimitsValueChanged"
                                        Label="Max Resolution" Variant="Variant.Outlined"
-                                       Dense="true" Margin="Margin.Dense" Disabled="ShowDownloadSelected || _limitsLocked"
+                                       Margin="Margin.Dense" Disabled="ShowDownloadSelected || _limitsLocked"
                                        Class="@(_limitsWarned && _maxResolution != Resolution.Any ? "cp-highlight" : "")">
                                 @foreach (var res in Enum.GetValues<Resolution>())
                                 {
@@ -210,8 +210,8 @@
                             </MudSelect>
                             <MudNumericField @bind-Value="_maxFileSize" @bind-Value:after="OnLimitsValueChanged"
                                              Label="Max Size (MB, 0 = no limit)"
-                                             Variant="Variant.Outlined" Min="0" Dense="true" Margin="Margin.Dense"
-                                             Disabled="ShowDownloadSelected || _limitsLocked" OnFocus="SelectAllText"
+                                             Variant="Variant.Outlined" Min="0" Margin="Margin.Dense"
+                                             Disabled="ShowDownloadSelected || _limitsLocked" @onfocus="SelectAllText"
                                              Class="@(_limitsWarned && _maxFileSize > 0 ? "cp-highlight" : "")" />
                         </MudStack>
                     </ChildContent>

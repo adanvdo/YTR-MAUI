@@ -37,3 +37,4 @@ publish-windows.bat
 ## IDE files
 .kiro/
 /.kiro/*
+/release-windows.ps1

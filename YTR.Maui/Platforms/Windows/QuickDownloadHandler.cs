@@ -112,11 +112,12 @@ public sealed class QuickDownloadHandler
 
             if (result.IsSuccess)
             {
-                inputWindow.Complete($"✓ {result.Value!.Title}");
+                var record = result.Value!; // result.IsSuccess implies Value is present
+                inputWindow.Complete($"✓ {record.Title}");
 
                 if (_settings.Download.AutoOpenDownloadLocation)
                 {
-                    var folder = Path.GetDirectoryName(result.Value.FilePath);
+                    var folder = Path.GetDirectoryName(record.FilePath);
                     if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -230,12 +231,13 @@ public sealed class QuickDownloadHandler
 
             if (result.IsSuccess)
             {
-                progressWindow?.Complete($"✓ {result.Value!.Title}");
+                var record = result.Value!;
+                progressWindow?.Complete($"✓ {record.Title}");
 
                 // Honor the auto-open download location setting
                 if (_settings.Download.AutoOpenDownloadLocation)
                 {
-                    var folder = Path.GetDirectoryName(result.Value.FilePath);
+                    var folder = Path.GetDirectoryName(record.FilePath);
                     if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
