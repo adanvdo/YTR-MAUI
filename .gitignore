@@ -32,10 +32,9 @@ installer/tools/*.exe
 /YTR.Maui/Resources/App/ffprobe.exe
 /YTR.Maui/Resources/App/node.exe
 
-publish-windows.bat
-
 ## IDE files
 .kiro/
 /.kiro/*
-/release-windows.ps1
 /.vscode/*
+*.ps1
+*.bat
