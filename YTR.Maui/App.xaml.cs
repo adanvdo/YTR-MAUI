@@ -65,7 +65,7 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
-        _mainWindow = new Window(new MainPage()) { Title = "YTR" };
+        _mainWindow = new Window(new MainPage()) { Title = string.Empty };
 
 #if WINDOWS
         InitializeWindowsPlatformFeatures(_mainWindow);
