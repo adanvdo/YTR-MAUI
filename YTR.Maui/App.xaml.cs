@@ -52,6 +52,7 @@ public partial class App : Application
     private WndProcDelegate? _wndProcDelegate;
     private nint _hwnd;
     private bool _isExiting;
+    private bool _windowStateSaved;
     private bool _hasMinimizedOnce;
     private ITrayService? _tray;
 #endif
@@ -146,15 +147,7 @@ public partial class App : Application
         if (tray is not null)
         {
             tray.ShowRequested += () => MainThread.BeginInvokeOnMainThread(() => RestoreWindow(window));
-            tray.ExitRequested += () => MainThread.BeginInvokeOnMainThread(() =>
-            {
-                _isExiting = true;
-                SaveWindowState(window);
-                // Ensure window is visible so MAUI can close it properly
-                if (_hwnd != 0)
-                    ShowWindow(_hwnd, SW_SHOW);
-                Current?.Quit();
-            });
+            tray.ExitRequested += () => MainThread.BeginInvokeOnMainThread(() => ExitApplication());
         }
 
         // Minimize to tray (item 25) — subclass the window to intercept minimize and close
@@ -180,19 +173,19 @@ public partial class App : Application
                     Marshal.GetFunctionPointerForDelegate(_wndProcDelegate));
             }
         };
-
-        window.Destroying += (_, _) => SaveWindowState(window);
     }
 
     private nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
-        // Intercept close (X button) → save state and exit cleanly
-        if (msg == WM_CLOSE && !_isExiting)
+        // Intercept close (X button) → save state and exit
+        if (msg == WM_CLOSE)
         {
-            _isExiting = true;
-            SaveWindowState(_mainWindow!);
-            Current?.Quit();
-            return 0;
+            if (!_isExiting)
+            {
+                ExitApplication();
+                return 0;
+            }
+            // When _isExiting is true, let WM_CLOSE pass through to actually destroy the window
         }
 
         // Intercept minimize → hide window to tray (but not when exiting)
@@ -219,6 +212,29 @@ public partial class App : Application
         return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
     }
 
+    /// <summary>
+    /// Performs a clean exit: saves state, disposes services, then terminates the process.
+    /// </summary>
+    private void ExitApplication()
+    {
+        if (_isExiting) return;
+        _isExiting = true;
+
+        // Save window state once
+        SaveWindowState(_mainWindow!);
+
+        // Dispose tray and hotkey services to release their background threads
+        var services = Handler?.MauiContext?.Services;
+        if (services is not null)
+        {
+            (services.GetService<ITrayService>() as IDisposable)?.Dispose();
+            (services.GetService<IHotkeyService>() as IDisposable)?.Dispose();
+        }
+
+        // Force the process to exit — avoids hangs from WinUI/WebView2 shutdown issues
+        Environment.Exit(0);
+    }
+
     private void RestoreWindow(Window window)
     {
         if (_hwnd != 0)
@@ -231,13 +247,21 @@ public partial class App : Application
 
     private void SaveWindowState(Window window)
     {
-        if (_settings is null) return;
-        _settings.WindowState.X = (int)window.X;
-        _settings.WindowState.Y = (int)window.Y;
-        _settings.WindowState.Width = (int)window.Width;
-        _settings.WindowState.Height = (int)window.Height;
-        // Save synchronously since we're in a closing handler
-        _settings.SaveAsync().GetAwaiter().GetResult();
+        if (_settings is null || _windowStateSaved) return;
+        _windowStateSaved = true;
+
+        try
+        {
+            _settings.WindowState.X = (int)window.X;
+            _settings.WindowState.Y = (int)window.Y;
+            _settings.WindowState.Width = (int)window.Width;
+            _settings.WindowState.Height = (int)window.Height;
+            _settings.SaveAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Don't let save failures prevent shutdown
+        }
     }
 #endif
 }

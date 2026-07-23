@@ -123,12 +123,17 @@ If you always want the same output format, enable **Always convert to preferred 
 
 ### Limits
 
-Cap downloads by resolution or file size:
+Constrain downloads and filter available formats by resolution or file size:
 
 - **Max Resolution** — 480p, 720p, 1080p, 4K, or Any (no limit)
 - **Max File Size** — set a size cap in MB (0 = unlimited)
 
-These can also be enforced globally from Settings → Advanced → Restrictions.
+Limits apply in two scenarios:
+
+- **Download Best** — selects the highest quality format that stays within the specified limits
+- **List Formats** — only shows formats that are within the specified limits
+
+These can be set per-download in the options panel, or enforced globally from Settings → Advanced → Restrictions.
 
 ---
 
