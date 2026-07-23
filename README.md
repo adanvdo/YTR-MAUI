@@ -27,7 +27,7 @@ YTR is a fast, feature-rich app for downloading media from popular platforms. Av
 - Download video and audio from YouTube, Reddit, Twitter/X, Vimeo, Instagram, Twitch, and TikTok
 - Full playlist support — download all items or pick specific ones
 - Choose exact quality: from 480p SD to 4K UHD
-- Extract segments (clips) from any video by specifying start/end times
+- Extract segments (clips) from video or audio by specifying start/end times
 - Visual crop tool to trim video borders
 - Convert to your preferred format on the fly
 - Dark and light theme
