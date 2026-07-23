@@ -10,6 +10,16 @@ public interface IPlatformService
     string DefaultAudioPath { get; }
 
     /// <summary>
+    /// The platform tag prefix used in GitHub release tags (e.g. "win", "android").
+    /// </summary>
+    string PlatformTag { get; }
+
+    /// <summary>
+    /// The expected filename of the installer/package asset in GitHub Releases.
+    /// </summary>
+    string InstallerAssetName { get; }
+
+    /// <summary>
     /// Gets the path to a bundled resource (yt-dlp, ffmpeg, etc.).
     /// </summary>
     string GetResourcePath(string resourceName);

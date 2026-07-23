@@ -16,6 +16,10 @@ public sealed class WindowsPlatformService : IPlatformService
     public string DefaultAudioPath =>
         Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
 
+    public string PlatformTag => "win";
+
+    public string InstallerAssetName => "YTR-Setup.exe";
+
     public string GetResourcePath(string resourceName)
     {
         // Resources are bundled in the app's resource directory

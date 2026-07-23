@@ -7,6 +7,8 @@ namespace YTR.Core.Services.Impl;
 
 /// <summary>
 /// Checks for and downloads application updates from GitHub Releases.
+/// Releases are tagged per-platform (e.g. "win-v1.2.0", "android-v1.0.3")
+/// so each platform can version independently.
 /// Nothing is automatic — the user must explicitly trigger check and install.
 /// </summary>
 public sealed class AppUpdateService : IAppUpdateService
@@ -16,7 +18,6 @@ public sealed class AppUpdateService : IAppUpdateService
     private readonly ILogger<AppUpdateService> _logger;
 
     private const string GitHubReleasesUrl = "https://api.github.com/repos/adanvdo/YTR-MAUI/releases";
-    private const string InstallerAssetName = "YTR-Setup.exe";
 
     public AppUpdateService(
         IHttpClientFactory httpClientFactory,
@@ -35,23 +36,16 @@ public sealed class AppUpdateService : IAppUpdateService
         try
         {
             var currentVersion = GetCurrentVersion();
+            var prefix = $"{_platform.PlatformTag}-v";
 
-            // For stable, we can use the /latest endpoint directly
-            // For beta/alpha, we need to scan all releases
-            var url = channel == ReleaseChannel.Stable
-                ? $"{GitHubReleasesUrl}/latest"
-                : $"{GitHubReleasesUrl}?per_page=20";
-
-            var response = await _httpClient.GetAsync(url, ct);
+            // Always fetch the full list since /latest doesn't filter by platform tag
+            var response = await _httpClient.GetAsync($"{GitHubReleasesUrl}?per_page=30", ct);
 
             if (!response.IsSuccessStatusCode)
                 return Result<AppRelease?>.Failure($"GitHub returned {(int)response.StatusCode} {response.StatusCode}.");
 
             var json = await response.Content.ReadAsStringAsync(ct);
-
-            AppRelease? release = channel == ReleaseChannel.Stable
-                ? ParseSingleRelease(json, channel)
-                : FindLatestForChannel(json, channel);
+            var release = FindLatestForPlatform(json, prefix, channel);
 
             if (release is null)
                 return Result<AppRelease?>.Success(null);
@@ -79,7 +73,7 @@ public sealed class AppUpdateService : IAppUpdateService
             var updateDir = Path.Combine(_platform.AppDataDirectory, "Updates");
             Directory.CreateDirectory(updateDir);
 
-            var filePath = Path.Combine(updateDir, InstallerAssetName);
+            var filePath = Path.Combine(updateDir, _platform.InstallerAssetName);
 
             // Delete existing file if present
             if (File.Exists(filePath))
@@ -136,19 +130,18 @@ public sealed class AppUpdateService : IAppUpdateService
         Environment.Exit(0);
     }
 
-    private AppRelease? ParseSingleRelease(string json, ReleaseChannel channel)
-    {
-        using var doc = JsonDocument.Parse(json);
-        return ParseReleaseElement(doc.RootElement, channel);
-    }
-
-    private AppRelease? FindLatestForChannel(string json, ReleaseChannel channel)
+    private AppRelease? FindLatestForPlatform(string json, string prefix, ReleaseChannel channel)
     {
         using var doc = JsonDocument.Parse(json);
 
         foreach (var element in doc.RootElement.EnumerateArray())
         {
             var tagName = element.GetProperty("tag_name").GetString() ?? string.Empty;
+
+            // Only consider releases tagged for this platform
+            if (!tagName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var releaseChannel = GetChannelFromTag(tagName);
 
             // For beta channel: accept beta and stable releases
@@ -162,7 +155,7 @@ public sealed class AppUpdateService : IAppUpdateService
 
             if (matches)
             {
-                var release = ParseReleaseElement(element, releaseChannel);
+                var release = ParseReleaseElement(element, prefix, releaseChannel);
                 if (release is not null)
                     return release;
             }
@@ -171,21 +164,21 @@ public sealed class AppUpdateService : IAppUpdateService
         return null;
     }
 
-    private AppRelease? ParseReleaseElement(JsonElement element, ReleaseChannel channel)
+    private AppRelease? ParseReleaseElement(JsonElement element, string prefix, ReleaseChannel channel)
     {
         var tagName = element.GetProperty("tag_name").GetString() ?? string.Empty;
-        var version = ParseVersionFromTag(tagName);
+        var version = ParseVersionFromTag(tagName, prefix);
         if (version is null)
             return null;
 
-        // Find the installer asset
+        // Find the installer/package asset for this platform
         string? downloadUrl = null;
         if (element.TryGetProperty("assets", out var assets))
         {
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = asset.GetProperty("name").GetString();
-                if (string.Equals(name, InstallerAssetName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(name, _platform.InstallerAssetName, StringComparison.OrdinalIgnoreCase))
                 {
                     downloadUrl = asset.GetProperty("browser_download_url").GetString();
                     break;
@@ -222,15 +215,16 @@ public sealed class AppUpdateService : IAppUpdateService
     }
 
     /// <summary>
-    /// Parses a version from a tag like "v1.2.3", "v1.2.3-beta.1", or "v1.0.0-alpha.2".
+    /// Parses a version from a platform-prefixed tag like "win-v1.2.0", "android-v1.0.3-beta.1".
+    /// The prefix (e.g. "win-v") is stripped first, then the pre-release suffix is removed.
     /// </summary>
-    private static Version? ParseVersionFromTag(string tag)
+    private static Version? ParseVersionFromTag(string tag, string prefix)
     {
-        if (string.IsNullOrEmpty(tag))
+        if (string.IsNullOrEmpty(tag) || !tag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             return null;
 
-        // Strip leading 'v'
-        var versionStr = tag.StartsWith('v') ? tag[1..] : tag;
+        // Strip the platform prefix (e.g. "win-v") to get "1.2.0" or "1.2.0-beta.1"
+        var versionStr = tag[prefix.Length..];
 
         // Strip pre-release suffix (everything after first '-')
         var hyphenIndex = versionStr.IndexOf('-');

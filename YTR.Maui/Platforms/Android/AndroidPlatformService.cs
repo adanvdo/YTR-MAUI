@@ -17,6 +17,10 @@ public sealed class AndroidPlatformService : IPlatformService
         Path.Combine(global::Android.OS.Environment.GetExternalStoragePublicDirectory(
             global::Android.OS.Environment.DirectoryDownloads)?.AbsolutePath ?? "/sdcard/Download", "YTR", "Audio");
 
+    public string PlatformTag => "android";
+
+    public string InstallerAssetName => "YTR.apk";
+
     public string GetResourcePath(string resourceName)
     {
         // On Android, binaries would be in app's native lib directory or extracted to files dir
