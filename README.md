@@ -37,6 +37,20 @@ YTR is a fast, feature-rich app for downloading media from popular platforms. Av
 
 ---
 
+## System Requirements
+
+### Windows
+
+- Windows 10 (version 1903 or later), 64-bit
+- ~150 MB disk space (including bundled tools)
+- Internet connection for downloading media
+
+### Android
+
+- *Coming Soon*
+
+---
+
 ## Installation
 
 1. Download the latest installer from the [Releases](https://github.com/adanvdo/YTR-MAUI/releases) page.
@@ -239,14 +253,6 @@ Go to Settings → About and click **Check for Updates**. If a new version is av
 ### Tool updates (yt-dlp & FFmpeg)
 
 YTR bundles yt-dlp and FFmpeg. To keep them current, go to Settings → About → Dependencies, click **Check Versions**, and update individually if newer versions are available.
-
----
-
-## System Requirements
-
-- Windows 10 (version 1903 or later), 64-bit
-- ~150 MB disk space (including bundled tools)
-- Internet connection for downloading media
 
 ---
 
