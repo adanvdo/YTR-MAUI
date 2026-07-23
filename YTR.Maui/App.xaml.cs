@@ -257,7 +257,10 @@ public partial class App : Application
             _settings.WindowState.Y = (int)window.Y;
             _settings.WindowState.Width = (int)window.Width;
             _settings.WindowState.Height = (int)window.Height;
-            _settings.SaveAsync().GetAwaiter().GetResult();
+
+            // Run on thread pool to avoid deadlocking the UI thread, with a timeout
+            var saveTask = Task.Run(() => _settings.SaveAsync());
+            saveTask.Wait(TimeSpan.FromSeconds(2));
         }
         catch
         {

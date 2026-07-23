@@ -68,21 +68,15 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Type: filesandordirs; Name: "{localappdata}\YTR"
 
 [Code]
-// Kill processes whose executable lives under the given directory.
-// Uses WMIC to filter by path so we don't kill unrelated ffmpeg/node/etc.
+// Kill processes related to the application before install/uninstall.
 procedure KillAppProcesses(AppDir: String);
 var
   ResultCode: Integer;
-  EscapedDir: String;
 begin
-  // WMIC WHERE clause uses backslash-escaped paths
-  EscapedDir := AppDir;
-  StringChangeEx(EscapedDir, '\', '\\', True);
-
   Exec('taskkill', '/f /im {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('wmic', 'process where "ExecutablePath like ''' + EscapedDir + '\\%''" delete', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  // WebView2 child processes are spawned from the user data folder, not the app dir
-  Exec('taskkill', '/f /im msedgewebview2.exe /fi "MODULES eq WebView2Loader.dll"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill', '/f /im ffmpeg.exe /fi "MODULES eq {#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill', '/f /im node.exe /fi "MODULES eq {#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill', '/f /im msedgewebview2.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(500);
 end;
 
