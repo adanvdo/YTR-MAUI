@@ -29,7 +29,8 @@
         <ApplicationId>com.jamgalactic.ytr</ApplicationId>
 
         <!-- Versions (sourced from Directory.Build.props) -->
-        <ApplicationDisplayVersion>$(YtrVersion).$(YtrAlphaBuild)</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion Condition="'$(YtrAlphaBuild)' != '0'">$(YtrVersion).$(YtrAlphaBuild)</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion Condition="'$(YtrAlphaBuild)' == '0'">$(YtrVersion)</ApplicationDisplayVersion>
 
         <!-- Windows: use the alpha build number -->
         <ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">$(YtrAlphaBuild)</ApplicationVersion>
