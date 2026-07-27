@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject ISettingsService SettingsService
+@inject NavigationManager Nav
 
 <MudThemeProvider @bind-IsDarkMode="SettingsService.Appearance.DarkMode" Theme="_theme" />
 <MudPopoverProvider />
@@ -13,7 +14,7 @@
         <MudSpacer />
         <MudIconButton Href="/" Icon="@Icons.Material.Filled.Home"
                        Color="Color.Inherit" title="Home" />
-        <MudIconButton Href="/history" Icon="@Icons.Material.Filled.History"
+        <MudIconButton OnClick="ToggleHistory" Icon="@Icons.Material.Filled.History"
                        Color="Color.Inherit" title="History" />
         <MudIconButton Href="/settings" Icon="@Icons.Material.Filled.Settings"
                        Color="Color.Inherit" title="Settings" />
@@ -46,6 +47,15 @@
     protected override void OnInitialized()
     {
         SettingsService.DarkModeChanged += OnDarkModeChanged;
+    }
+
+    private void ToggleHistory()
+    {
+        var uri = new Uri(Nav.Uri);
+        if (uri.AbsolutePath.Equals("/history", StringComparison.OrdinalIgnoreCase))
+            Nav.NavigateTo("/");
+        else
+            Nav.NavigateTo("/history");
     }
 
     private void OnDarkModeChanged()

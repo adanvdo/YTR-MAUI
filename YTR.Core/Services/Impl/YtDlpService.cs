@@ -48,6 +48,8 @@ public sealed partial class YtDlpService : IYtDlpService
 
     private string NodePath => _platform.GetResourcePath("node");
 
+    private string FfmpegDir => Path.GetDirectoryName(_platform.GetResourcePath("ffmpeg")) ?? "";
+
     /// <summary>
     /// Builds the --js-runtimes argument pointing to the bundled node.exe.
     /// </summary>
@@ -56,11 +58,17 @@ public sealed partial class YtDlpService : IYtDlpService
     public async Task<Result<MediaMetadata>> GetMediaInfoAsync(string url, CancellationToken ct = default)
     {
         var args = $"{JsRuntimesArg} --dump-json --no-playlist \"{url}\"";
+        _logger.LogDebug("[yt-dlp] GetMediaInfo started for URL: {Url}", url);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         var result = await _processRunner.RunAsync(new ProcessRequest
         {
             Executable = YtDlpPath,
             Arguments = args
         }, ct);
+
+        sw.Stop();
+        _logger.LogDebug("[yt-dlp] GetMediaInfo completed in {Elapsed} for URL: {Url}", FormatElapsed(sw.Elapsed), url);
 
         if (result.WasCancelled)
             return Result<MediaMetadata>.Failure("Operation cancelled.");
@@ -83,11 +91,17 @@ public sealed partial class YtDlpService : IYtDlpService
     public async Task<Result<MediaMetadata>> GetPlaylistInfoAsync(string url, CancellationToken ct = default)
     {
         var args = $"{JsRuntimesArg} --flat-playlist --dump-single-json \"{url}\"";
+        _logger.LogDebug("[yt-dlp] GetPlaylistInfo started for URL: {Url}", url);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         var result = await _processRunner.RunAsync(new ProcessRequest
         {
             Executable = YtDlpPath,
             Arguments = args
         }, ct);
+
+        sw.Stop();
+        _logger.LogDebug("[yt-dlp] GetPlaylistInfo completed in {Elapsed} for URL: {Url}", FormatElapsed(sw.Elapsed), url);
 
         if (result.WasCancelled)
             return Result<MediaMetadata>.Failure("Operation cancelled.");
@@ -110,11 +124,17 @@ public sealed partial class YtDlpService : IYtDlpService
     public async Task<Result<IReadOnlyList<string>>> GetFormatUrlsAsync(string url, string format, CancellationToken ct = default)
     {
         var args = $"{JsRuntimesArg} --get-url -f \"{format}\" \"{url}\"";
+        _logger.LogDebug("[yt-dlp] GetFormatUrls started for URL: {Url} | Format: {Format}", url, format);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         var result = await _processRunner.RunAsync(new ProcessRequest
         {
             Executable = YtDlpPath,
             Arguments = args
         }, ct);
+
+        sw.Stop();
+        _logger.LogDebug("[yt-dlp] GetFormatUrls completed in {Elapsed} for URL: {Url}", FormatElapsed(sw.Elapsed), url);
 
         if (result.WasCancelled)
             return Result<IReadOnlyList<string>>.Failure("Operation cancelled.");
@@ -167,6 +187,9 @@ public sealed partial class YtDlpService : IYtDlpService
 
         var args = BuildDownloadArgs(url, formatString, outputTemplate, streamKind, embedThumbnail: streamKind == StreamKind.Audio);
 
+        _logger.LogDebug("[yt-dlp] DownloadBest started | URL: {Url} | StreamKind: {StreamKind} | Format: {Format}", url, streamKind, formatString);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         string? downloadedFile = null;
         bool isDownloading = false;
         var request = new ProcessRequest
@@ -184,6 +207,10 @@ public sealed partial class YtDlpService : IYtDlpService
         };
 
         var result = await _processRunner.RunAsync(request, ct);
+
+        sw.Stop();
+        _logger.LogDebug("[yt-dlp] DownloadBest completed in {Elapsed} | URL: {Url} | Success: {Success}",
+            FormatElapsed(sw.Elapsed), url, result.Success);
 
         if (result.WasCancelled)
             return Result<string>.Failure("Download cancelled.");
@@ -219,6 +246,9 @@ public sealed partial class YtDlpService : IYtDlpService
 
         var args = BuildDownloadArgs(url, formatId, outputTemplate, streamKind);
 
+        _logger.LogDebug("[yt-dlp] DownloadFormat started | URL: {Url} | StreamKind: {StreamKind} | FormatId: {FormatId}", url, streamKind, formatId);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         string? downloadedFile = null;
         bool isDownloading = false;
         var request = new ProcessRequest
@@ -236,6 +266,10 @@ public sealed partial class YtDlpService : IYtDlpService
         };
 
         var result = await _processRunner.RunAsync(request, ct);
+
+        sw.Stop();
+        _logger.LogDebug("[yt-dlp] DownloadFormat completed in {Elapsed} | URL: {Url} | FormatId: {FormatId} | Success: {Success}",
+            FormatElapsed(sw.Elapsed), url, formatId, result.Success);
 
         if (result.WasCancelled)
             return Result<string>.Failure("Download cancelled.");
@@ -257,6 +291,7 @@ public sealed partial class YtDlpService : IYtDlpService
         var args = new List<string>
         {
             JsRuntimesArg,
+            $"--ffmpeg-location \"{FfmpegDir}\"",
             $"-f \"{format}\"",
             $"-o \"{outputTemplate}\"",
             "--no-playlist",
@@ -270,17 +305,27 @@ public sealed partial class YtDlpService : IYtDlpService
             args.Add($"--merge-output-format {VideoFormatToString(mergeFormat.Value)}");
         }
 
-        // Preferred format conversion via yt-dlp (for "Download Preferred" flow)
+        // Determine if this is a specific format selection (e.g. "137+140") vs a "best" query.
+        // Specific format IDs are numeric or numeric+numeric; "best" queries contain letters like "bestvideo".
+        bool isSpecificFormat = !format.Contains("best", StringComparison.OrdinalIgnoreCase);
+
+        // Preferred format conversion via yt-dlp (for "Download Best/Preferred" flow)
         if (streamKind == StreamKind.Audio)
         {
             var preferred = _processingOptions.Value.PreferredAudioFormat;
             if (_processingOptions.Value.AlwaysConvertToPreferred && preferred != AudioFormat.Unspecified)
             {
-                args.Add($"-x --audio-format {AudioFormatToString(preferred)}");
+                // For specific format selections, the orchestrator handles conversion decisions.
+                // Only apply yt-dlp audio conversion for "best" downloads.
+                if (!isSpecificFormat)
+                {
+                    args.Add($"-x --audio-format {AudioFormatToString(preferred)}");
+                }
             }
 
             // Embed thumbnail for audio downloads (not supported for opus/aac)
-            if (embedThumbnail && preferred != AudioFormat.Opus && preferred != AudioFormat.Aac)
+            if (embedThumbnail && _processingOptions.Value.PreferredAudioFormat != AudioFormat.Opus
+                && _processingOptions.Value.PreferredAudioFormat != AudioFormat.Aac)
             {
                 args.Add("--embed-thumbnail");
                 args.Add("--add-metadata");
@@ -293,8 +338,18 @@ public sealed partial class YtDlpService : IYtDlpService
             var preferredVideo = _processingOptions.Value.PreferredVideoFormat;
             if (preferredVideo != VideoFormat.Unspecified && preferredVideo != VideoFormat.Gif)
             {
-                args.Add($"--recode-video {VideoFormatToString(preferredVideo)}");
-                args.Add($"--merge-output-format {VideoFormatToString(preferredVideo)}");
+                if (isSpecificFormat)
+                {
+                    // For specific format selections, only set the merge container (remux, no re-encode).
+                    // The orchestrator will decide if actual re-encoding is needed.
+                    args.Add($"--merge-output-format {VideoFormatToString(preferredVideo)}");
+                }
+                else
+                {
+                    // For "best" downloads, use --recode-video to ensure the output matches preferred format.
+                    args.Add($"--recode-video {VideoFormatToString(preferredVideo)}");
+                    args.Add($"--merge-output-format {VideoFormatToString(preferredVideo)}");
+                }
             }
         }
 
@@ -477,6 +532,7 @@ public sealed partial class YtDlpService : IYtDlpService
         // Select the best thumbnail with a matching aspect ratio.
         // Iterate from last (highest quality) to first and pick the first match.
         string? thumbnailUrl = null;
+        bool thumbnailAspectRatioMatched = false;
         if (videoAspectRatio.HasValue)
         {
             for (int i = thumbnails.Count - 1; i >= 0; i--)
@@ -488,19 +544,18 @@ public sealed partial class YtDlpService : IYtDlpService
                     if (Math.Abs(thumbRatio - videoAspectRatio.Value) < 0.05)
                     {
                         thumbnailUrl = t.Url;
+                        thumbnailAspectRatioMatched = true;
                         break;
                     }
                 }
             }
         }
 
-        // If no aspect-ratio-matched thumbnail found but thumbnails exist without dimensions,
-        // fall back to null (don't guess — crop tool won't be shown)
-        // If we couldn't determine video aspect ratio, also fall back to the last thumbnail
-        // as a best-effort for display (but crop tool accuracy isn't guaranteed)
-        if (thumbnailUrl is null && videoAspectRatio is null)
+        // If no aspect-ratio-matched thumbnail found, fall back to the highest-quality
+        // thumbnail available (last in the list) or the top-level "thumbnail" field.
+        // This ensures a thumbnail is always displayed when one is available.
+        if (thumbnailUrl is null)
         {
-            // Can't determine video aspect ratio — use last thumbnail for display only
             thumbnailUrl = thumbnails.Count > 0 ? thumbnails[^1].Url : root.GetPropertyOrDefault("thumbnail", null);
         }
 
@@ -512,6 +567,8 @@ public sealed partial class YtDlpService : IYtDlpService
             Description = root.GetPropertyOrDefault("description", null),
             Duration = duration,
             ThumbnailUrl = thumbnailUrl,
+            OriginalThumbnailUrl = thumbnailUrl,
+            ThumbnailAspectRatioMatched = thumbnailAspectRatioMatched,
             Thumbnails = thumbnails,
             Uploader = root.GetPropertyOrDefault("uploader", null),
             Platform = MediaPlatform.Unknown, // Caller can set this from UrlAnalyzer
@@ -582,6 +639,15 @@ public sealed partial class YtDlpService : IYtDlpService
     #endregion
 
     #region Regex
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed.TotalHours >= 1)
+            return elapsed.ToString(@"h\:mm\:ss\.fff");
+        if (elapsed.TotalMinutes >= 1)
+            return elapsed.ToString(@"m\:ss\.fff");
+        return $"{elapsed.TotalSeconds:F3}s";
+    }
 
     [GeneratedRegex(@"\[download\]\s+(?:(?<percent>[\d\.]+)%(?:\s+of\s+\~?\s*(?<total>[\d\.\w]+))?\s+at\s+(?:(?<speed>[\d\.\w]+\/s)|[\w\s]+)\s+ETA\s(?<eta>[\d\:]+))?")]
     private static partial Regex ProgressRegex();

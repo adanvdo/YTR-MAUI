@@ -39,7 +39,10 @@ public sealed class ProcessRunner : IProcessRunner
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
-        _logger.LogDebug("Running: {Executable} {Arguments}", request.Executable, request.Arguments);
+        var startTime = DateTime.UtcNow;
+        var executableName = Path.GetFileNameWithoutExtension(request.Executable);
+        _logger.LogDebug("[{Tool}] Command started at {StartTime:yyyy-MM-dd HH:mm:ss.fff UTC}", executableName, startTime);
+        _logger.LogDebug("[{Tool}] Full command: {Executable} {Arguments}", executableName, request.Executable, request.Arguments);
 
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
@@ -94,6 +97,11 @@ public sealed class ProcessRunner : IProcessRunner
 
             await process.WaitForExitAsync(ct);
 
+            var endTime = DateTime.UtcNow;
+            var duration = endTime - startTime;
+            _logger.LogDebug("[{Tool}] Command finished at {EndTime:yyyy-MM-dd HH:mm:ss.fff UTC} | Duration: {Duration} | Exit code: {ExitCode}",
+                executableName, endTime, FormatDuration(duration), process.ExitCode);
+
             return new ProcessResult
             {
                 ExitCode = process.ExitCode,
@@ -104,6 +112,11 @@ public sealed class ProcessRunner : IProcessRunner
         }
         catch (OperationCanceledException)
         {
+            var endTime = DateTime.UtcNow;
+            var duration = endTime - startTime;
+            _logger.LogDebug("[{Tool}] Command cancelled at {EndTime:yyyy-MM-dd HH:mm:ss.fff UTC} | Duration before cancel: {Duration}",
+                executableName, endTime, FormatDuration(duration));
+
             return new ProcessResult
             {
                 ExitCode = -1,
@@ -114,7 +127,11 @@ public sealed class ProcessRunner : IProcessRunner
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Process execution failed: {Executable}", request.Executable);
+            var endTime = DateTime.UtcNow;
+            var duration = endTime - startTime;
+            _logger.LogError(ex, "[{Tool}] Process execution failed at {EndTime:yyyy-MM-dd HH:mm:ss.fff UTC} | Duration: {Duration}",
+                executableName, endTime, FormatDuration(duration));
+
             return new ProcessResult
             {
                 ExitCode = -1,
@@ -127,5 +144,14 @@ public sealed class ProcessRunner : IProcessRunner
         {
             _activeProcesses.TryRemove(process.Id, out _);
         }
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return duration.ToString(@"h\:mm\:ss\.fff");
+        if (duration.TotalMinutes >= 1)
+            return duration.ToString(@"m\:ss\.fff");
+        return $"{duration.TotalSeconds:F3}s";
     }
 }

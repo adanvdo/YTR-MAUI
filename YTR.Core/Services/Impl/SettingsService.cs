@@ -28,6 +28,7 @@ public sealed class SettingsService : ISettingsService
     public AppearanceOptions Appearance { get; private set; } = new();
     public UpdateOptions Updates { get; private set; } = new();
     public HistoryOptions History { get; private set; } = new();
+    public AudioPreferencesOptions AudioPreferences { get; private set; } = new();
     public WindowStateOptions WindowState { get; private set; } = new();
 
     public SettingsService(IPlatformService platform, ILogger<SettingsService> logger)
@@ -63,6 +64,7 @@ public sealed class SettingsService : ISettingsService
                 Appearance = container.Appearance ?? new();
                 Updates = container.Updates ?? new();
                 History = container.History ?? new();
+                AudioPreferences = container.AudioPreferences ?? new();
                 WindowState = container.WindowState ?? new();
             }
 
@@ -101,6 +103,7 @@ public sealed class SettingsService : ISettingsService
             Appearance = Appearance,
             Updates = Updates,
             History = History,
+            AudioPreferences = AudioPreferences,
             WindowState = WindowState
         };
 
@@ -129,6 +132,7 @@ public sealed class SettingsService : ISettingsService
         public AppearanceOptions? Appearance { get; set; }
         public UpdateOptions? Updates { get; set; }
         public HistoryOptions? History { get; set; }
+        public AudioPreferencesOptions? AudioPreferences { get; set; }
         public WindowStateOptions? WindowState { get; set; }
     }
 

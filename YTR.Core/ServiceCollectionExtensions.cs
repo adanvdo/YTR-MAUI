@@ -34,6 +34,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IYtDlpService, YtDlpService>();
         services.AddScoped<IMediaProcessor, FfmpegMediaProcessor>();
         services.AddScoped<IDownloadOrchestrator, DownloadOrchestrator>();
+        services.AddScoped<IAudioTaggingService, AudioTaggingService>();
+        services.AddSingleton<IThumbnailService, ThumbnailService>();
         services.AddScoped<IAppUpdateService, AppUpdateService>();
         services.AddScoped<IDependencyUpdateService, DependencyUpdateService>();
         services.AddSingleton<IToolVersionService, ToolVersionService>();
@@ -65,6 +67,14 @@ public static class ServiceCollectionExtensions
                 opts.PreferredAudioFormat = svc.Processing.PreferredAudioFormat;
                 opts.FetchMissingMetadata = svc.Processing.FetchMissingMetadata;
                 opts.VerboseOutput = svc.Processing.VerboseOutput;
+            });
+
+        services.AddOptions<AudioPreferencesOptions>()
+            .Configure<ISettingsService>((opts, svc) =>
+            {
+                opts.EmbedMetadata = svc.AudioPreferences.EmbedMetadata;
+                opts.UseArtistTrackFilename = svc.AudioPreferences.UseArtistTrackFilename;
+                opts.UseVideoThumbnailAsAlbumArt = svc.AudioPreferences.UseVideoThumbnailAsAlbumArt;
             });
 
         services.AddHttpClient();

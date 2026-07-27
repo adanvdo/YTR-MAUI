@@ -10,6 +10,7 @@ public interface IHistoryService
 {
     Task<IReadOnlyList<DownloadRecord>> GetAllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<DownloadRecord>> GetRecentAsync(int count, CancellationToken ct = default);
+    Task<DownloadRecord?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task RecordAsync(DownloadRecord record, CancellationToken ct = default);
     Task UpdateAsync(DownloadRecord record, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);

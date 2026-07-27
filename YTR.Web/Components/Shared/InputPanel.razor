@@ -44,6 +44,15 @@
 
     private bool ShowReset => HasData || HasOptions;
 
+    /// <summary>
+    /// Sets the URL programmatically from a parent component.
+    /// </summary>
+    public void SetUrl(string url)
+    {
+        _url = url;
+        StateHasChanged();
+    }
+
     protected override void OnParametersSet()
     {
         _loading = IsLoading;

@@ -26,7 +26,7 @@
 <div style="flex:1;overflow-y:auto;min-height:0;">
 <MudDataGrid T="DownloadRecord" Items="_records" Dense="true" Hover="true"
              Loading="_loading" SortMode="SortMode.Single" Filterable="true"
-             RowClick="OnRowClick">
+             RowClick="OnRowClick" RowClassFunc="GetRowClass">
     <Columns>
         <TemplateColumn Title="" HeaderStyle="width:30px;" CellStyle="width:30px;" Sortable="false">
             <CellTemplate>
@@ -44,6 +44,9 @@
                     <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small"
                                    OnClick="@(() => OpenLocation(context.Item))"
                                    Disabled="@(!FileExists(context.Item))" title="Open file location" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Link" Size="Size.Small"
+                                   OnClick="@(() => UseUrl(context.Item))"
+                                   title="Use URL for new download" />
                     <MudIconButton Icon="@Icons.Material.Filled.Replay" Size="Size.Small"
                                    OnClick="@(() => ReDownload(context.Item))"
                                    title="Re-download with same settings" />
@@ -58,26 +61,28 @@
 @if (_selectedRecord is not null)
 {
     <MudPaper Class="pa-3 mt-2" Elevation="2">
-        <MudText Typo="Typo.subtitle2">@_selectedRecord.Title</MudText>
-        <MudText Typo="Typo.caption">URL: @_selectedRecord.Url</MudText>
-        <MudText Typo="Typo.caption">Format: @_selectedRecord.Format</MudText>
-        <MudText Typo="Typo.caption">Path: @_selectedRecord.FilePath</MudText>
-        @if (_selectedRecord.SegmentStart.HasValue)
-        {
-            <MudText Typo="Typo.caption">Segment: @_selectedRecord.SegmentStart → +@_selectedRecord.SegmentDuration</MudText>
-        }
-        @if (_selectedRecord.CropValues is not null)
-        {
-            <MudText Typo="Typo.caption">Crop: @_selectedRecord.CropValues</MudText>
-        }
-        @if (_selectedRecord.VideoConversion.HasValue)
-        {
-            <MudText Typo="Typo.caption">Convert Video: @_selectedRecord.VideoConversion</MudText>
-        }
-        @if (_selectedRecord.AudioConversion.HasValue)
-        {
-            <MudText Typo="Typo.caption">Convert Audio: @_selectedRecord.AudioConversion</MudText>
-        }
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.subtitle2">@_selectedRecord.Title</MudText>
+            <MudText Typo="Typo.caption">URL: @_selectedRecord.Url</MudText>
+            <MudText Typo="Typo.caption">Format: @_selectedRecord.Format</MudText>
+            <MudText Typo="Typo.caption">Path: @_selectedRecord.FilePath</MudText>
+            @if (_selectedRecord.SegmentStart.HasValue)
+            {
+                <MudText Typo="Typo.caption">Segment: @_selectedRecord.SegmentStart → +@_selectedRecord.SegmentDuration</MudText>
+            }
+            @if (_selectedRecord.CropValues is not null)
+            {
+                <MudText Typo="Typo.caption">Crop: @_selectedRecord.CropValues</MudText>
+            }
+            @if (_selectedRecord.VideoConversion.HasValue)
+            {
+                <MudText Typo="Typo.caption">Convert Video: @_selectedRecord.VideoConversion</MudText>
+            }
+            @if (_selectedRecord.AudioConversion.HasValue)
+            {
+                <MudText Typo="Typo.caption">Convert Audio: @_selectedRecord.AudioConversion</MudText>
+            }
+        </MudStack>
     </MudPaper>
 }
 </div>
@@ -104,13 +109,18 @@
     }
 
     /// <summary>
-    /// Re-download: navigates to home with the URL pre-filled.
-    /// The Home page would need to accept query params to restore settings — 
-    /// for now we use NavigationManager with a query string.
+    /// Navigates to home with the URL pre-filled for a new download.
+    /// </summary>
+    private void UseUrl(DownloadRecord record)
+    {
+        Nav.NavigateTo($"/?url={Uri.EscapeDataString(record.Url)}");
+    }
+
+    /// <summary>
+    /// Navigates to home and immediately starts a re-download with the same settings.
     /// </summary>
     private void ReDownload(DownloadRecord record)
     {
-        // Navigate to home with the URL as a query parameter
         Nav.NavigateTo($"/?redownload={Uri.EscapeDataString(record.Id.ToString())}");
     }
 
@@ -118,6 +128,7 @@
     {
         await HistoryService.ClearAsync(filter);
         _records = await HistoryService.GetAllAsync();
+        _selectedRecord = null;
         StateHasChanged();
     }
 
@@ -125,8 +136,12 @@
     {
         await HistoryService.ClearWithFilesAsync(filter);
         _records = await HistoryService.GetAllAsync();
+        _selectedRecord = null;
         StateHasChanged();
     }
+
+    private string GetRowClass(DownloadRecord item, int _) =>
+        item == _selectedRecord ? "selected-row" : string.Empty;
 
     private static bool FileExists(DownloadRecord record) =>
         !string.IsNullOrEmpty(record.FilePath) && File.Exists(record.FilePath);

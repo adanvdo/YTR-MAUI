@@ -13,6 +13,7 @@ public interface ISettingsService
     AppearanceOptions Appearance { get; }
     UpdateOptions Updates { get; }
     HistoryOptions History { get; }
+    AudioPreferencesOptions AudioPreferences { get; }
     WindowStateOptions WindowState { get; }
 
     Task LoadAsync(CancellationToken ct = default);

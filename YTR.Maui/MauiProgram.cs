@@ -25,6 +25,9 @@ public static class MauiProgram
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
+        builder.Logging.AddFilter("YTR.Core.Services.Impl.ProcessRunner", LogLevel.Debug);
+        builder.Logging.AddFilter("YTR.Core.Services.Impl.YtDlpService", LogLevel.Debug);
+        builder.Logging.AddFilter("YTR.Core.Services.Impl.FfmpegMediaProcessor", LogLevel.Debug);
 #endif
 
         // MudBlazor

@@ -31,6 +31,12 @@ public sealed class HistoryService : IHistoryService
             .ToListAsync(ct);
     }
 
+    public async Task<DownloadRecord?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.Downloads.FirstOrDefaultAsync(d => d.Id == id, ct);
+    }
+
     public async Task RecordAsync(DownloadRecord record, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);

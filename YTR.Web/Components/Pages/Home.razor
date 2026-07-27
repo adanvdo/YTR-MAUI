@@ -4,6 +4,8 @@
 @inject IUrlAnalyzer UrlAnalyzer
 @inject ISettingsService Settings
 @inject IPlatformService Platform
+@inject IThumbnailService ThumbnailService
+@inject IHistoryService HistoryService
 @inject DownloadStateService State
 @inject IJSRuntime JS
 
@@ -13,7 +15,7 @@
     <div class="home-content">
         <div class="home-main" style="@MainStyle">
             <div class="home-fixed-top">
-                <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" OnUrlChanged="OnUrlChanged" IsLoading="_loadingFormats"
+                <InputPanel @ref="_inputPanel" OnUrlAnalyzed="OnUrlAnalyzed" OnUrlChanged="OnUrlChanged" IsLoading="_loadingFormats"
                            HasData="_metadata is not null" HasOptions="_hasOptions" OnReset="ResetAll" />
                 <VideoInfoPanel Class="mt-2" Metadata="_metadata" />
             </div>
@@ -70,12 +72,19 @@
     private FormatPair? _selectedPair;
     private FormatInfo? _selectedFormat;
     private IReadOnlyList<PlaylistItem>? _selectedPlaylistItems;
+    private InputPanel? _inputPanel;
     private ControlPanel? _controlPanel;
     private bool _downloading;
     private bool _loadingFormats;
     private bool _hasFormatSelection;
     private bool _hasOptions;
     private string _currentUrl = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "url")]
+    public string? InitialUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "redownload")]
+    public string? RedownloadId { get; set; }
 
     // Resize grip state
     private const int MinMainWidth = 436;
@@ -95,6 +104,51 @@
     private string SidebarStyle => _sidebarWidth.HasValue
         ? $"width: {_sidebarWidth.Value:0}px; flex: none; min-width: {MinSidebarWidth}px;"
         : $"min-width: {MinSidebarWidth}px;";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Handle "Use URL" navigation from history
+        if (!string.IsNullOrWhiteSpace(InitialUrl))
+        {
+            _currentUrl = InitialUrl;
+            _inputPanel?.SetUrl(InitialUrl);
+            StateHasChanged();
+        }
+        // Handle "Re-download with same settings" from history
+        else if (!string.IsNullOrWhiteSpace(RedownloadId) && Guid.TryParse(RedownloadId, out var recordId))
+        {
+            var record = await HistoryService.GetByIdAsync(recordId);
+            if (record is not null)
+            {
+                _currentUrl = record.Url;
+                _inputPanel?.SetUrl(record.Url);
+                StateHasChanged();
+
+                // Build a DownloadRequest from the saved record settings
+                int[]? cropValues = null;
+                if (!string.IsNullOrEmpty(record.CropValues))
+                {
+                    cropValues = record.CropValues.Split(',')
+                        .Select(v => int.TryParse(v.Trim(), out var n) ? n : 0)
+                        .ToArray();
+                    if (cropValues.Length != 4) cropValues = null;
+                }
+
+                var request = new DownloadRequest
+                {
+                    SegmentStart = record.SegmentStart,
+                    SegmentDuration = record.SegmentDuration,
+                    CropValues = cropValues,
+                    ConvertVideo = record.VideoConversion,
+                    ConvertAudio = record.AudioConversion
+                };
+
+                await ExecuteDownload(record.StreamKind, request);
+            }
+        }
+    }
 
     private async Task OnGripPointerDown(PointerEventArgs e)
     {
@@ -192,6 +246,19 @@
             _metadata = result.Value;
             _formats = FilterFormats(result.Value.Formats);
             State.UpdateStatus($"Found {_formats.Count} formats.");
+
+            // If the thumbnail doesn't match the video's aspect ratio, crop it
+            if (!_metadata.ThumbnailAspectRatioMatched
+                && !string.IsNullOrEmpty(_metadata.ThumbnailUrl)
+                && BestVideoWidth.HasValue && BestVideoHeight.HasValue && BestVideoHeight.Value > 0)
+            {
+                var targetRatio = (double)BestVideoWidth.Value / BestVideoHeight.Value;
+                var croppedUri = await ThumbnailService.GetCroppedThumbnailAsync(_metadata.ThumbnailUrl, targetRatio);
+                if (croppedUri is not null)
+                {
+                    _metadata = _metadata with { ThumbnailUrl = croppedUri, ThumbnailAspectRatioMatched = true };
+                }
+            }
         }
         else
         {
@@ -266,7 +333,10 @@
         }
 
         // Attach the media title and duration so downstream services can use them
-        request = request with { Title = _metadata.Title, MediaDuration = _metadata.Duration };
+        var videoAspectRatio = (BestVideoWidth.HasValue && BestVideoHeight.HasValue && BestVideoHeight.Value > 0)
+            ? (double)BestVideoWidth.Value / BestVideoHeight.Value
+            : (double?)null;
+        request = request with { Title = _metadata.Title, MediaDuration = _metadata.Duration, Uploader = _metadata.Uploader, ThumbnailUrl = _metadata.OriginalThumbnailUrl, VideoAspectRatio = videoAspectRatio, AvailableFormats = _metadata.Formats };
 
         // Revalidate segment values against actual media duration (may not have been known at BuildRequest time)
         if (_metadata.Duration.HasValue)

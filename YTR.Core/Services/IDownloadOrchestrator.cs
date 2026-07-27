@@ -57,9 +57,19 @@ public sealed record DownloadRequest
     public bool EmbedThumbnail { get; init; }
     public string? PlaylistFolder { get; init; }
     public string? Title { get; init; }
+    public string? Uploader { get; init; }
+    public string? ThumbnailUrl { get; init; }
+    public double? VideoAspectRatio { get; init; }
     public TimeSpan? MediaDuration { get; init; }
     public int MaxResolutionPixels { get; init; }
     public int MaxFileSizeMb { get; init; }
+
+    /// <summary>
+    /// All available formats from yt-dlp metadata. Used to find compatible alternative
+    /// formats when the user's selection has codec incompatibilities, avoiding unnecessary
+    /// ffmpeg transcoding by picking a natively-compatible stream instead.
+    /// </summary>
+    public IReadOnlyList<FormatInfo>? AvailableFormats { get; init; }
 }
 
 /// <summary>

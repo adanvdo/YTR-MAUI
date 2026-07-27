@@ -15,9 +15,21 @@ public sealed record MediaMetadata
 
     /// <summary>
     /// URL of a thumbnail whose aspect ratio matches the video's aspect ratio.
-    /// Null if no matching thumbnail is available (visual crop tool should not be shown).
+    /// May be a data URI if the thumbnail was cropped locally.
     /// </summary>
     public string? ThumbnailUrl { get; init; }
+
+    /// <summary>
+    /// The original remote thumbnail URL before any local cropping.
+    /// Used for downloading the full-resolution image for album art embedding.
+    /// </summary>
+    public string? OriginalThumbnailUrl { get; init; }
+
+    /// <summary>
+    /// True if the ThumbnailUrl has been verified to match the video's aspect ratio.
+    /// When false, the thumbnail may need to be cropped before use in the visual crop tool.
+    /// </summary>
+    public bool ThumbnailAspectRatioMatched { get; init; }
 
     /// <summary>
     /// All available thumbnails for this media item.

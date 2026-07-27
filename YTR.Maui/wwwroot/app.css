@@ -274,6 +274,14 @@ html, body {
     padding: 8px 16px 8px 16px !important;
 }
 
+/* Settings category cards with border */
+.settings-card {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 4px;
+    padding: 8px;
+    height: 100%;
+}
+
 /* Make the tab panels container scrollable with a max height */
 .settings-tabs .mud-tabs-panels {
     max-height: 60vh;

@@ -20,47 +20,80 @@
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-6">
 
         @* ════════════════════════════════════════════════════════════════════
-        GENERAL TAB — Downloads + History
+        GENERAL TAB — Downloads + Audio Preferences + History
         ════════════════════════════════════════════════════════════════════ *@
         <MudTabPanel Text="General">
-            <MudText Typo="Typo.h6" Class="mb-3">Downloads</MudText>
-            <MudStack Spacing="3">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
-                                Label="Video Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
-                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
-                                OnClick="() => PickFolder(true)" title="Browse" />
-                </MudStack>
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
-                                Label="Audio Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
-                    <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
-                                OnClick="() => PickFolder(false)" title="Browse" />
-                </MudStack>
-                <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
-                        Label="Use video title as filename" Color="Color.Primary" />
-                <MudSwitch @bind-Value="SettingsService.Download.CreateFolderForPlaylists"
-                        Label="Create folder for playlist downloads" Color="Color.Primary" />
-                <MudSwitch @bind-Value="SettingsService.Download.AutoOpenDownloadLocation"
-                        Label="Auto-open download location" Color="Color.Primary" />
-            </MudStack>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Downloads</MudText>
+                        <MudStack Spacing="1">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudTextField @bind-Value="SettingsService.Download.VideoDownloadPath"
+                                            Label="Video Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
+                                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                                            OnClick="() => PickFolder(true)" title="Browse" />
+                            </MudStack>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudTextField @bind-Value="SettingsService.Download.AudioDownloadPath"
+                                            Label="Audio Download Path" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;" />
+                                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                                            OnClick="() => PickFolder(false)" title="Browse" />
+                            </MudStack>
+                            <MudSwitch @bind-Value="SettingsService.Download.UseTitleAsFileName"
+                                    Label="Use video title as filename" Color="Color.Primary" />
+                            <MudSwitch @bind-Value="SettingsService.Download.CreateFolderForPlaylists"
+                                    Label="Create folder for playlist downloads" Color="Color.Primary" />
+                            <MudSwitch @bind-Value="SettingsService.Download.AutoOpenDownloadLocation"
+                                    Label="Auto-open download location" Color="Color.Primary" />
+                        </MudStack>
+                    </div>
+                </MudItem>
 
-            <MudDivider Class="my-2" />
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Audio Preferences</MudText>
+                        <MudStack Spacing="1">
+                            <MudSwitch @bind-Value="SettingsService.AudioPreferences.EmbedMetadata"
+                                    Label="Embed Metadata" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption" Class="ml-12 mt-n2" Style="color: var(--mud-palette-text-secondary);">
+                                Embed available metadata in the audio file (artist, track name, etc)
+                            </MudText>
 
-            <MudText Typo="Typo.h6" Class="mb-3">History</MudText>
-            <MudStack Spacing="3">
-                <MudSwitch @bind-Value="SettingsService.History.Enabled"
-                        Label="Enable download history" Color="Color.Primary" />
-                <MudNumericField @bind-Value="SettingsService.History.RetentionDays"
-                                Label="History retention (days)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="365" />
-            </MudStack>
+                            <MudSwitch @bind-Value="SettingsService.AudioPreferences.UseArtistTrackFilename"
+                                    Label="Use [Artist - Track Name] as filename" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption" Class="ml-12 mt-n2" Style="color: var(--mud-palette-text-secondary);">
+                                Save audio downloads using the available artist name and track name as the filename
+                            </MudText>
+
+                            <MudSwitch @bind-Value="SettingsService.AudioPreferences.UseVideoThumbnailAsAlbumArt"
+                                    Label="Use Video Thumbnails as Album Art" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption" Class="ml-12 mt-n2" Style="color: var(--mud-palette-text-secondary);">
+                                When downloading audio from a video stream, use the video thumbnail as the embedded album art
+                            </MudText>
+                        </MudStack>
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">History</MudText>
+                        <MudStack Spacing="1">
+                            <MudSwitch @bind-Value="SettingsService.History.Enabled"
+                                    Label="Enable download history" Color="Color.Primary" />
+                            <MudNumericField @bind-Value="SettingsService.History.RetentionDays"
+                                            Label="History retention (days)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="365" />
+                        </MudStack>
+                    </div>
+                </MudItem>
+            </MudGrid>
         </MudTabPanel>
 
         @* ════════════════════════════════════════════════════════════════════
         APPEARANCE TAB — Dark Mode, Format Mode, Segment Mode
         ════════════════════════════════════════════════════════════════════ *@
         <MudTabPanel Text="Appearance">
-            <MudStack Spacing="3">
+            <MudStack Spacing="1">
                 <MudSwitch @bind-Value="SettingsService.Appearance.DarkMode"
                         Label="Dark mode" Color="Color.Primary" />
                 <MudSelect @bind-Value="SettingsService.Appearance.FormatMode"
@@ -84,80 +117,90 @@
         ADVANCED TAB — Processing, Restrictions, Hotkeys
         ════════════════════════════════════════════════════════════════════ *@
         <MudTabPanel Text="Advanced">
-            <MudText Typo="Typo.h6" Class="mb-2">Processing</MudText>
-            <MudStack Spacing="1">
-                <MudSwitch @bind-Value="SettingsService.Processing.AlwaysConvertToPreferred"
-                        Label="Always convert to preferred format" Color="Color.Primary" />
-                <MudSelect @bind-Value="SettingsService.Processing.PreferredVideoFormat"
-                        Label="Preferred Video Format" Variant="Variant.Outlined" Margin="Margin.Dense">
-                    @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif && f != VideoFormat.Unspecified))
-                    {
-                        <MudSelectItem Value="fmt">@fmt</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudSelect @bind-Value="SettingsService.Processing.PreferredAudioFormat"
-                        Label="Preferred Audio Format" Variant="Variant.Outlined" Margin="Margin.Dense">
-                    @foreach (var fmt in Enum.GetValues<AudioFormat>().Where(f => f != AudioFormat.Unspecified))
-                    {
-                        <MudSelectItem Value="fmt">@fmt</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudSwitch @bind-Value="SettingsService.Processing.FetchMissingMetadata"
-                        Label="Fetch missing metadata when listing formats" Color="Color.Primary" />
-                <MudSwitch @bind-Value="SettingsService.Processing.VerboseOutput"
-                        Label="Verbose output" Color="Color.Primary" />
-            </MudStack>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Processing</MudText>
+                        <MudStack Spacing="1">
+                            <MudSwitch @bind-Value="SettingsService.Processing.AlwaysConvertToPreferred"
+                                    Label="Always convert to preferred format" Color="Color.Primary" />
+                            <MudSelect @bind-Value="SettingsService.Processing.PreferredVideoFormat"
+                                    Label="Preferred Video Format" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var fmt in Enum.GetValues<VideoFormat>().Where(f => f != VideoFormat.Gif && f != VideoFormat.Unspecified))
+                                {
+                                    <MudSelectItem Value="fmt">@fmt</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudSelect @bind-Value="SettingsService.Processing.PreferredAudioFormat"
+                                    Label="Preferred Audio Format" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var fmt in Enum.GetValues<AudioFormat>().Where(f => f != AudioFormat.Unspecified))
+                                {
+                                    <MudSelectItem Value="fmt">@fmt</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudSwitch @bind-Value="SettingsService.Processing.FetchMissingMetadata"
+                                    Label="Fetch missing metadata when listing formats" Color="Color.Primary" />
+                            <MudSwitch @bind-Value="SettingsService.Processing.VerboseOutput"
+                                    Label="Verbose output" Color="Color.Primary" />
+                        </MudStack>
+                    </div>
+                </MudItem>
 
-            <MudDivider Class="my-2" />
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Restrictions</MudText>
+                        <MudStack Spacing="1">
+                            <MudSwitch @bind-Value="SettingsService.Restrictions.EnforceRestrictions"
+                                    Label="Enforce restrictions for new downloads" Color="Color.Primary" />
+                            <MudSelect @bind-Value="SettingsService.Restrictions.MaxResolution"
+                                    Label="Max Resolution" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var res in Enum.GetValues<Resolution>())
+                                {
+                                    <MudSelectItem Value="res">@res</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
+                                            Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                        </MudStack>
+                    </div>
+                </MudItem>
 
-            <MudText Typo="Typo.h6" Class="mb-2">Restrictions</MudText>
-            <MudStack Spacing="3">
-                <MudSwitch @bind-Value="SettingsService.Restrictions.EnforceRestrictions"
-                        Label="Enforce restrictions for new downloads" Color="Color.Primary" />
-                <MudSelect @bind-Value="SettingsService.Restrictions.MaxResolution"
-                        Label="Max Resolution" Variant="Variant.Outlined" Margin="Margin.Dense">
-                    @foreach (var res in Enum.GetValues<Resolution>())
-                    {
-                        <MudSelectItem Value="res">@res</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
-                                Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
-            </MudStack>
-
-            <MudDivider Class="my-2" />
-
-            <MudText Typo="Typo.h6" Class="mb-2">Hotkeys</MudText>
-            <MudStack Spacing="3">
-                <MudSwitch @bind-Value="SettingsService.Download.EnableHotkeys"
-                        Label="Enable global hotkey (Quick Download)" Color="Color.Primary" />
-                <MudStack Row="true" Spacing="2">
-                    <MudSelect @bind-Value="SettingsService.Download.HotkeyModifiers"
-                            Label="Modifiers" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
-                            Disabled="@(!SettingsService.Download.EnableHotkeys)">
-                        <MudSelectItem Value="@("Ctrl")">Ctrl</MudSelectItem>
-                        <MudSelectItem Value="@("Shift")">Shift</MudSelectItem>
-                        <MudSelectItem Value="@("Alt")">Alt</MudSelectItem>
-                        <MudSelectItem Value="@("Ctrl+Shift")">Ctrl+Shift</MudSelectItem>
-                        <MudSelectItem Value="@("Ctrl+Alt")">Ctrl+Alt</MudSelectItem>
-                        <MudSelectItem Value="@("Alt+Shift")">Alt+Shift</MudSelectItem>
-                        <MudSelectItem Value="@("Ctrl+Alt+Shift")">Ctrl+Alt+Shift</MudSelectItem>
-                    </MudSelect>
-                    <MudSelect @bind-Value="SettingsService.Download.HotkeyKey"
-                            Label="Key" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
-                            Disabled="@(!SettingsService.Download.EnableHotkeys)">
-                        @foreach (var k in _availableKeys)
-                        {
-                            <MudSelectItem Value="k">@k</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudStack>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Current: @(SettingsService.Download.EnableHotkeys
-                        ? $"{SettingsService.Download.HotkeyModifiers}+{SettingsService.Download.HotkeyKey}"
-                        : "Disabled")
-                </MudText>
-            </MudStack>
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Hotkeys</MudText>
+                        <MudStack Spacing="1">
+                            <MudSwitch @bind-Value="SettingsService.Download.EnableHotkeys"
+                                    Label="Enable global hotkey (Quick Download)" Color="Color.Primary" />
+                            <MudStack Row="true" Spacing="1">
+                                <MudSelect @bind-Value="SettingsService.Download.HotkeyModifiers"
+                                        Label="Modifiers" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
+                                        Disabled="@(!SettingsService.Download.EnableHotkeys)">
+                                    <MudSelectItem Value="@("Ctrl")">Ctrl</MudSelectItem>
+                                    <MudSelectItem Value="@("Shift")">Shift</MudSelectItem>
+                                    <MudSelectItem Value="@("Alt")">Alt</MudSelectItem>
+                                    <MudSelectItem Value="@("Ctrl+Shift")">Ctrl+Shift</MudSelectItem>
+                                    <MudSelectItem Value="@("Ctrl+Alt")">Ctrl+Alt</MudSelectItem>
+                                    <MudSelectItem Value="@("Alt+Shift")">Alt+Shift</MudSelectItem>
+                                    <MudSelectItem Value="@("Ctrl+Alt+Shift")">Ctrl+Alt+Shift</MudSelectItem>
+                                </MudSelect>
+                                <MudSelect @bind-Value="SettingsService.Download.HotkeyKey"
+                                        Label="Key" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
+                                        Disabled="@(!SettingsService.Download.EnableHotkeys)">
+                                    @foreach (var k in _availableKeys)
+                                    {
+                                        <MudSelectItem Value="k">@k</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Current: @(SettingsService.Download.EnableHotkeys
+                                    ? $"{SettingsService.Download.HotkeyModifiers}+{SettingsService.Download.HotkeyKey}"
+                                    : "Disabled")
+                            </MudText>
+                        </MudStack>
+                    </div>
+                </MudItem>
+            </MudGrid>
         </MudTabPanel>
         <MudTabPanel Text="About">
             <MudGrid>

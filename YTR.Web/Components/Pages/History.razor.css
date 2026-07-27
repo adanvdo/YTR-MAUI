@@ -1,0 +1,3 @@
+::deep .selected-row {
+    background-color: var(--mud-palette-primary-lighten) !important;
+}

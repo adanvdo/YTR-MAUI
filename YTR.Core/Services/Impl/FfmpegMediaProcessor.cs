@@ -198,7 +198,7 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
 
         if (isAudioOnly)
         {
-            // Audio-only: only apply audio codec
+            // Audio-only: resolve the audio codec for the target format
             if (audioFormat != AudioFormat.Unspecified)
             {
                 var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
@@ -231,16 +231,16 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
             };
             codecArgs.Add($"-c:v {vEncoder} {encoderExtraArgs}");
 
-            if (audioFormat != AudioFormat.Unspecified)
-            {
-                var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
-                codecArgs.Add($"-c:a {aCodec.Encoder}");
-            }
+            // Resolve audio codec — ensure it's compatible with the target container
+            var resolvedAudio = Models.CodecMap.ResolveAudioCodec(targetFormat, audioFormat);
+            if (resolvedAudio is not null)
+                codecArgs.Add($"-c:a {resolvedAudio.Encoder}");
             else
             {
-                var aCodec = Models.CodecMap.GetBestAudioCodec(targetFormat);
-                if (aCodec is not null)
-                    codecArgs.Add($"-c:a {aCodec.Encoder}");
+                // No explicit audio needed — use best default for container
+                var bestAudio = Models.CodecMap.GetBestAudioCodec(targetFormat);
+                if (bestAudio is not null)
+                    codecArgs.Add($"-c:a {bestAudio.Encoder}");
             }
         }
         // else: no codec args — let ffmpeg choose defaults for the output container
@@ -387,6 +387,10 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         CancellationToken ct,
         string outputPath)
     {
+        _logger.LogDebug("[ffmpeg] Processing started | Output: {OutputPath}", outputPath);
+        _logger.LogDebug("[ffmpeg] Full args: {Args}", args);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         // Use -progress - -nostats to get structured progress on stdout
         // (-progress pipe:1 doesn't work reliably on Windows)
         var fullArgs = progress is not null && totalDuration.HasValue
@@ -423,15 +427,23 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
 
         var result = await _processRunner.RunAsync(request, ct);
 
+        sw.Stop();
+
         if (result.WasCancelled)
+        {
+            _logger.LogDebug("[ffmpeg] Processing cancelled after {Elapsed} | Output: {OutputPath}", FormatElapsed(sw.Elapsed), outputPath);
             return Result<string>.Failure("Processing cancelled.");
+        }
 
         if (File.Exists(outputPath))
         {
+            _logger.LogDebug("[ffmpeg] Processing succeeded in {Elapsed} | Output: {OutputPath}", FormatElapsed(sw.Elapsed), outputPath);
             progress?.Report(1.0);
             return Result<string>.Success(outputPath);
         }
 
+        _logger.LogDebug("[ffmpeg] Processing failed after {Elapsed} | Output: {OutputPath} | Error: {Error}",
+            FormatElapsed(sw.Elapsed), outputPath, result.StandardError.Trim());
         return Result<string>.Failure($"FFmpeg failed: {result.StandardError.Trim()}");
     }
 
@@ -448,8 +460,11 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
 
         if (audioFormat != AudioFormat.Unspecified)
         {
-            var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
-            parts.Add($"-c:a {aCodec.Encoder}");
+            // Resolve audio codec ensuring compatibility with the target container
+            var targetContainer = videoFormat != VideoFormat.Unspecified ? videoFormat : VideoFormat.Mp4;
+            var resolvedAudio = Models.CodecMap.ResolveAudioCodec(targetContainer, audioFormat);
+            if (resolvedAudio is not null)
+                parts.Add($"-c:a {resolvedAudio.Encoder}");
         }
         else if (videoFormat != VideoFormat.Unspecified)
         {
@@ -464,6 +479,15 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
     }
 
     private static string FormatTime(TimeSpan ts) => ts.ToString(@"hh\:mm\:ss\.fff");
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        if (elapsed.TotalHours >= 1)
+            return elapsed.ToString(@"h\:mm\:ss\.fff");
+        if (elapsed.TotalMinutes >= 1)
+            return elapsed.ToString(@"m\:ss\.fff");
+        return $"{elapsed.TotalSeconds:F3}s";
+    }
 
     private static VideoFormat ExtensionToVideoFormat(string ext) => ext.ToLowerInvariant() switch
     {

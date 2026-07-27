@@ -17,6 +17,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
     private readonly IHistoryService _history;
     private readonly IUrlAnalyzer _urlAnalyzer;
     private readonly ISettingsService _settings;
+    private readonly IAudioTaggingService _audioTagging;
     private readonly ILogger<DownloadOrchestrator> _logger;
 
     public DownloadOrchestrator(
@@ -26,6 +27,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         IHistoryService history,
         IUrlAnalyzer urlAnalyzer,
         ISettingsService settings,
+        IAudioTaggingService audioTagging,
         ILogger<DownloadOrchestrator> logger)
     {
         _ytDlp = ytDlp;
@@ -34,6 +36,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         _history = history;
         _urlAnalyzer = urlAnalyzer;
         _settings = settings;
+        _audioTagging = audioTagging;
         _logger = logger;
     }
 
@@ -75,7 +78,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         }
 
         // If post-processing is needed and we have format URLs, process directly from stream.
-        if (request is not null && HasPostProcessing(request))
+        if (request is not null && NeedsExternalProcessing(request))
         {
             var streamResult = await ProcessFromStreamAsync(url, null, streamKind, request, progress, output, ct);
             if (streamResult.IsSuccess)
@@ -97,6 +100,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
 
         var filePath = downloadResult.Value!;
         filePath = await PostProcessAsync(filePath, request, streamKind, progress, output, ct);
+        filePath = await ApplyAudioTaggingAsync(filePath, streamKind, request, output, ct);
 
         var record = BuildRecord(url, filePath, streamKind, "best", request, restrictions);
         await _history.RecordAsync(record, ct);
@@ -117,6 +121,11 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         if (!formatPair.IsValid)
             return Result<DownloadRecord>.Failure("Invalid format pair.");
 
+        // Resolve codec compatibility: if the audio stream isn't compatible with the
+        // target container, try to find a compatible audio format from the available streams
+        // so yt-dlp can merge natively without ffmpeg transcoding.
+        formatPair = ResolveCompatibleFormats(formatPair, request?.AvailableFormats, output);
+
         var streamKind = formatPair.StreamKind;
         var outputDir = GetOutputDirectory(streamKind, request?.PlaylistFolder);
         EnsureDirectoryExists(outputDir);
@@ -124,10 +133,13 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         output?.Report("Starting format download...");
         progress?.Report(new DownloadProgress { State = DownloadState.PreProcessing });
 
+        // Strip conversion options that already match the selected format (avoids unnecessary re-encoding)
+        var effectiveRequest = request is not null ? StripRedundantConversion(request, formatPair) : request;
+
         // If post-processing is needed, try stream-based processing first.
-        if (request is not null && HasPostProcessing(request))
+        if (effectiveRequest is not null && NeedsExternalProcessing(effectiveRequest))
         {
-            var streamResult = await ProcessFromStreamAsync(url, formatPair, streamKind, request, progress, output, ct);
+            var streamResult = await ProcessFromStreamAsync(url, formatPair, streamKind, effectiveRequest, progress, output, ct);
             if (streamResult.IsSuccess)
                 return streamResult;
             _logger.LogWarning("Stream processing failed, falling back: {Error}", streamResult.Error);
@@ -144,7 +156,8 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             return Result<DownloadRecord>.Failure(downloadResult.Error!);
 
         var filePath = downloadResult.Value!;
-        filePath = await PostProcessAsync(filePath, request, streamKind, progress, output, ct);
+        filePath = await PostProcessAsync(filePath, effectiveRequest, streamKind, progress, output, ct);
+        filePath = await ApplyAudioTaggingAsync(filePath, streamKind, effectiveRequest, output, ct);
 
         var record = BuildRecord(url, filePath, streamKind, formatPair.DisplayText, request);
         await _history.RecordAsync(record, ct);
@@ -288,7 +301,9 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         var outputDir = GetOutputDirectory(streamKind, request.PlaylistFolder);
         EnsureDirectoryExists(outputDir);
 
-        var fileName = $"{DateTime.Now:MMddyyyyHHmmss}";
+        var fileName = opts.UseTitleAsFileName && !string.IsNullOrWhiteSpace(request.Title)
+            ? SanitizeFileName(request.Title)
+            : $"{DateTime.Now:MMddyyyyHHmmss}";
         string ext;
         if (streamKind == StreamKind.Audio)
         {
@@ -329,6 +344,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             return Result<DownloadRecord>.Failure(result.Error!);
 
         var filePath = result.Value!;
+        filePath = await ApplyAudioTaggingAsync(filePath, streamKind, request, output, ct);
         var record = BuildRecord(url, filePath, streamKind, formatPair?.DisplayText ?? "best", request);
         await _history.RecordAsync(record, ct);
 
@@ -439,7 +455,9 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                 ? AudioFormatToExtension(request.ConvertAudio.Value).TrimStart('.') : null;
 
             bool videoAlreadyMatches = targetVideoExt is null || fileExt == targetVideoExt;
-            bool audioAlreadyMatches = targetAudioExt is null; // Can't easily check audio codec from extension alone
+            bool audioAlreadyMatches = targetAudioExt is null || fileExt == targetAudioExt
+                || (targetAudioExt == "m4a" && fileExt == "mp4")
+                || (targetAudioExt == "aac" && fileExt is "mp4" or "m4a");
 
             if (videoAlreadyMatches && audioAlreadyMatches)
             {
@@ -471,6 +489,13 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
                 _logger.LogWarning("Segment extraction failed: {Error}", segResult.Error);
                 return filePath;
             }
+        }
+
+        // If nothing left to process after skipping redundant conversions, return as-is
+        if (!hasSegment && !hasCrop && !hasConvert)
+        {
+            _logger.LogInformation("No processing needed after redundancy check, returning file as-is");
+            return filePath;
         }
 
         // Single-pass: combine segment + crop + convert into one ffmpeg call
@@ -514,6 +539,60 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
     {
         try { File.Delete(path); }
         catch { /* best effort cleanup */ }
+    }
+
+    /// <summary>
+    /// Applies audio tagging (metadata embedding, album art, filename rename) if the settings and file format allow.
+    /// </summary>
+    private async Task<string> ApplyAudioTaggingAsync(
+        string filePath,
+        StreamKind streamKind,
+        DownloadRequest? request,
+        IProgress<string>? output,
+        CancellationToken ct)
+    {
+        // Only tag audio downloads
+        if (streamKind != StreamKind.Audio)
+            return filePath;
+
+        // Only tag if the file format supports it
+        if (!_audioTagging.SupportsTagging(filePath))
+            return filePath;
+
+        var prefs = _settings.AudioPreferences;
+        bool shouldEmbedMeta = prefs.EmbedMetadata;
+        bool shouldEmbedArt = prefs.UseVideoThumbnailAsAlbumArt;
+        bool shouldRename = prefs.UseArtistTrackFilename;
+
+        if (!shouldEmbedMeta && !shouldEmbedArt && !shouldRename)
+            return filePath;
+
+        output?.Report("Tagging audio file...");
+
+        var tagRequest = new AudioTagRequest
+        {
+            FilePath = filePath,
+            Title = request?.Title,
+            Artist = request?.Uploader,
+            ThumbnailUrl = shouldEmbedArt ? request?.ThumbnailUrl : null,
+            VideoAspectRatio = request?.VideoAspectRatio,
+            EmbedThumbnail = shouldEmbedArt && !string.IsNullOrWhiteSpace(request?.ThumbnailUrl),
+            EmbedMetadata = shouldEmbedMeta,
+            UseArtistTrackFilename = shouldRename
+        };
+
+        try
+        {
+            var result = await _audioTagging.TagAsync(tagRequest, ct);
+            if (result != filePath)
+                output?.Report($"Renamed to: {Path.GetFileName(result)}");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Audio tagging failed for {Path}", filePath);
+            return filePath;
+        }
     }
 
     #endregion
@@ -572,8 +651,68 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
     private static bool HasPostProcessing(DownloadRequest request) =>
         request.SegmentStart.HasValue || request.SegmentDuration.HasValue ||
         request.CropValues is not null ||
-        (request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified) ||
-        (request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified);
+        request.ConvertVideo == VideoFormat.Gif;
+
+    /// <summary>
+    /// Returns true if the request needs processing via ffmpeg that can't be handled by yt-dlp natively.
+    /// yt-dlp handles --merge-output-format and --recode-video for format conversion,
+    /// so pure format conversion (without segment/crop) should not trigger ffmpeg processing.
+    /// </summary>
+    private static bool NeedsExternalProcessing(DownloadRequest request) =>
+        request.SegmentStart.HasValue || request.SegmentDuration.HasValue ||
+        request.CropValues is not null ||
+        request.ConvertVideo == VideoFormat.Gif;
+
+    /// <summary>
+    /// Removes conversion options from the request when the selected formats already match
+    /// the target format, preventing unnecessary re-encoding.
+    /// </summary>
+    private static DownloadRequest StripRedundantConversion(DownloadRequest request, FormatPair formatPair)
+    {
+        var convertVideo = request.ConvertVideo;
+        var convertAudio = request.ConvertAudio;
+        bool changed = false;
+
+        // Check if video conversion matches the selected video format's extension
+        if (convertVideo.HasValue && convertVideo != VideoFormat.Unspecified && formatPair.VideoFormat is not null)
+        {
+            var targetExt = VideoFormatToExtension(convertVideo.Value).TrimStart('.');
+            var sourceExt = formatPair.VideoFormat.Extension?.TrimStart('.').ToLowerInvariant();
+            if (string.Equals(targetExt, sourceExt, StringComparison.OrdinalIgnoreCase))
+            {
+                convertVideo = null;
+                changed = true;
+            }
+        }
+
+        // Check if audio conversion matches the selected audio format's extension
+        if (convertAudio.HasValue && convertAudio != AudioFormat.Unspecified && formatPair.AudioFormat is not null)
+        {
+            var targetExt = AudioFormatToExtension(convertAudio.Value).TrimStart('.');
+            var sourceExt = formatPair.AudioFormat.Extension?.TrimStart('.').ToLowerInvariant();
+            if (string.Equals(targetExt, sourceExt, StringComparison.OrdinalIgnoreCase))
+            {
+                convertAudio = null;
+                changed = true;
+            }
+        }
+
+        // For video+audio merge: if converting to mp4 and both streams are mp4/m4a compatible, skip
+        if (convertVideo.HasValue && convertVideo == VideoFormat.Mp4
+            && formatPair.VideoFormat is not null && formatPair.AudioFormat is not null)
+        {
+            var videoExt = formatPair.VideoFormat.Extension?.TrimStart('.').ToLowerInvariant();
+            var audioExt = formatPair.AudioFormat.Extension?.TrimStart('.').ToLowerInvariant();
+            // mp4 container natively holds h264/h265 video + aac/m4a audio
+            if (videoExt is "mp4" && audioExt is "m4a" or "mp4" or "aac")
+            {
+                convertVideo = null;
+                changed = true;
+            }
+        }
+
+        return changed ? request with { ConvertVideo = convertVideo, ConvertAudio = convertAudio } : request;
+    }
 
     /// <summary>
     /// Returns true if the request requires re-encoding (crop or format conversion).
@@ -624,6 +763,15 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             Directory.CreateDirectory(path);
     }
 
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c));
+        // Also restrict filenames similar to yt-dlp's --restrict-filenames
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, @"[^\w\-.]", "_");
+        return sanitized.Length > 200 ? sanitized[..200] : sanitized;
+    }
+
     private static string GenerateProcessedPath(string originalPath, string suffix)
     {
         var dir = Path.GetDirectoryName(originalPath) ?? ".";
@@ -654,6 +802,96 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         AudioFormat.Opus => ".opus",
         AudioFormat.Vorbis => ".ogg",
         _ => ".mp3"
+    };
+
+    #endregion
+
+    #region Format Compatibility Resolution
+
+    /// <summary>
+    /// Checks if the selected format pair has codec compatibility issues and attempts to
+    /// swap the incompatible stream with a compatible alternative from the available formats.
+    /// This avoids ffmpeg transcoding by using a natively-compatible stream that yt-dlp can merge.
+    /// </summary>
+    private FormatPair ResolveCompatibleFormats(
+        FormatPair formatPair,
+        IReadOnlyList<FormatInfo>? availableFormats,
+        IProgress<string>? output)
+    {
+        // Only relevant for video+audio pairs where we're merging two streams
+        if (formatPair.VideoFormat is null || formatPair.AudioFormat is null)
+            return formatPair;
+
+        // Determine the target container from the video stream
+        var videoCodecName = formatPair.VideoFormat.VideoCodec;
+        var targetContainer = CodecMap.GetBestContainerForCodec(videoCodecName);
+
+        // Check if the selected audio codec is compatible with that container
+        var audioCodecName = formatPair.AudioFormat.AudioCodec;
+        var audioCodecId = CodecMap.ParseAudioCodecName(audioCodecName);
+
+        if (audioCodecId != AudioCodecId.None)
+        {
+            var audioCodec = GetFfmpegCodecById(audioCodecId);
+            if (audioCodec is not null && CodecMap.IsAudioCodecCompatible(audioCodec, targetContainer))
+                return formatPair; // Already compatible, no swap needed
+        }
+        else
+        {
+            // Unknown codec — assume it might be compatible, don't force a swap
+            return formatPair;
+        }
+
+        // Audio is incompatible. Try to find a better audio stream from available formats.
+        if (availableFormats is null || availableFormats.Count == 0)
+        {
+            _logger.LogDebug("Audio codec '{AudioCodec}' is incompatible with {Container}, but no available formats to swap from",
+                audioCodecName, targetContainer);
+            return formatPair;
+        }
+
+        // Get the compatible audio codecs for the target container
+        var compatibleAudioCodecs = CodecMap.GetAudioCodecs(targetContainer);
+
+        // Find the best compatible audio stream: highest bitrate audio-only format
+        // whose codec matches one of the container's compatible codecs
+        var compatibleAudio = availableFormats
+            .Where(f => f.StreamKind == StreamKind.Audio)
+            .Where(f =>
+            {
+                var id = CodecMap.ParseAudioCodecName(f.AudioCodec);
+                if (id == AudioCodecId.None) return false;
+                var codec = GetFfmpegCodecById(id);
+                return codec is not null && compatibleAudioCodecs.Contains(codec);
+            })
+            .OrderByDescending(f => f.AudioBitrate ?? 0)
+            .FirstOrDefault();
+
+        if (compatibleAudio is not null)
+        {
+            _logger.LogInformation(
+                "Swapped incompatible audio '{OldCodec}' (format {OldId}) → '{NewCodec}' (format {NewId}) for {Container} compatibility",
+                audioCodecName, formatPair.AudioFormat.FormatId,
+                compatibleAudio.AudioCodec, compatibleAudio.FormatId, targetContainer);
+            output?.Report($"Auto-selected compatible audio: {compatibleAudio.AudioCodec} ({compatibleAudio.FormatId})");
+
+            return formatPair with { AudioFormat = compatibleAudio };
+        }
+
+        _logger.LogDebug("No compatible audio format found in available streams for {Container}, ffmpeg will transcode",
+            targetContainer);
+        return formatPair;
+    }
+
+    private static FfmpegCodec? GetFfmpegCodecById(AudioCodecId id) => id switch
+    {
+        AudioCodecId.Aac => CodecMap.Aac,
+        AudioCodecId.Mp3 => CodecMap.Mp3,
+        AudioCodecId.Opus => CodecMap.Opus,
+        AudioCodecId.Vorbis => CodecMap.Vorbis,
+        AudioCodecId.Flac => CodecMap.Flac,
+        AudioCodecId.Wav => CodecMap.Wav,
+        _ => null
     };
 
     #endregion
