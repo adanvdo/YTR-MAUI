@@ -6,7 +6,7 @@
       Only the segment for the current release channel is incremented,
       and segments to its right are reset to 0.
     -->
-    <YtrVersion>1.0.0</YtrVersion>
+    <YtrVersion>1.1.0</YtrVersion>
 
     <!--
       Alpha build number — the 4th version segment.
