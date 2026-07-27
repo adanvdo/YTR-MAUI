@@ -96,6 +96,7 @@
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public TimeSpan? Value { get; set; }
     [Parameter] public EventCallback<TimeSpan?> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnBlurred { get; set; }
 
     protected override void OnParametersSet()
     {
@@ -134,7 +135,7 @@
         catch { }
     }
 
-    private void OnBlur(int part)
+    private async Task OnBlur(int part)
     {
         // Commit whatever is in the buffer
         if (_editBuffer[part] is not null)
@@ -148,6 +149,10 @@
             _editBuffer[part] = null;
         }
         _focusedPart = -1;
+
+        // Notify parent of the committed value and that editing is complete
+        await NotifyChanged();
+        await OnBlurred.InvokeAsync();
     }
 
     private async Task OnInput(int part, ChangeEventArgs e)

@@ -42,6 +42,8 @@
                           SelectedPair="_selectedPair"
                           ThumbnailUrl="@(_metadata?.ThumbnailUrl)"
                           MediaDuration="@(_metadata?.Duration)"
+                          MediaWidth="@(BestVideoWidth)"
+                          MediaHeight="@(BestVideoHeight)"
                           IsPlaylist="@(_metadata?.IsPlaylist == true)"
                           HasOptionsChanged="OnOptionsChanged" />
         </div>
@@ -200,6 +202,63 @@
         // Attach the media title and duration so downstream services can use them
         request = request with { Title = _metadata.Title, MediaDuration = _metadata.Duration };
 
+        // Revalidate segment values against actual media duration (may not have been known at BuildRequest time)
+        if (_metadata.Duration.HasValue)
+        {
+            var maxDuration = _metadata.Duration.Value;
+            var segStart = request.SegmentStart;
+            var segDuration = request.SegmentDuration;
+            bool segChanged = false;
+
+            if (segStart.HasValue && segStart.Value >= maxDuration)
+            {
+                segStart = maxDuration - TimeSpan.FromSeconds(1);
+                if (segStart.Value < TimeSpan.Zero) segStart = TimeSpan.Zero;
+                segChanged = true;
+            }
+
+            if (segDuration.HasValue)
+            {
+                var effectiveStart = segStart ?? TimeSpan.Zero;
+                if (effectiveStart + segDuration.Value > maxDuration)
+                {
+                    segDuration = maxDuration - effectiveStart;
+                    segChanged = true;
+                }
+                if (segDuration.Value < TimeSpan.FromSeconds(1))
+                {
+                    segDuration = TimeSpan.FromSeconds(1);
+                    segChanged = true;
+                }
+            }
+
+            if (segChanged)
+            {
+                request = request with { SegmentStart = segStart, SegmentDuration = segDuration };
+                _controlPanel?.UpdateSegmentValues(segStart, segDuration);
+                StateHasChanged();
+            }
+        }
+
+        // Revalidate crop values against actual video dimensions
+        if (request.CropValues is { Length: 4 } cropVals)
+        {
+            var vw = BestVideoWidth;
+            var vh = BestVideoHeight;
+
+            if (vw.HasValue && vh.HasValue)
+            {
+                var clamped = CropHelper.ClampMargins(cropVals, vw.Value, vh.Value);
+                if (clamped[0] != cropVals[0] || clamped[1] != cropVals[1]
+                    || clamped[2] != cropVals[2] || clamped[3] != cropVals[3])
+                {
+                    request = request with { CropValues = clamped };
+                    _controlPanel?.UpdateCropValues(clamped[0], clamped[1], clamped[2], clamped[3]);
+                    StateHasChanged();
+                }
+            }
+        }
+
         _downloading = true;
         StateHasChanged();
 
@@ -274,6 +333,19 @@
             State.UpdateStatus($"Failed: {result.Error}");
         }
     }
+
+    /// <summary>
+    /// Best video format dimensions from metadata (used for crop validation when no format is selected).
+    /// </summary>
+    private int? BestVideoWidth => _metadata?.Formats
+        .Where(f => f.Width.HasValue && f.Height.HasValue)
+        .OrderByDescending(f => f.Height)
+        .FirstOrDefault()?.Width;
+
+    private int? BestVideoHeight => _metadata?.Formats
+        .Where(f => f.Width.HasValue && f.Height.HasValue)
+        .OrderByDescending(f => f.Height)
+        .FirstOrDefault()?.Height;
 
     private IReadOnlyList<FormatInfo> FilterFormats(IReadOnlyList<FormatInfo> formats)
     {

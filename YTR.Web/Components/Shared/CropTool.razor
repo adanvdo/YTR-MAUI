@@ -20,6 +20,9 @@
                 {
                     <div class="crop-overlay" style="@OverlayStyle"></div>
                     <div class="crop-selection" style="@SelectionStyle"></div>
+                    <div style="@MeasurementPositionStyle">
+                        <span style="@MeasurementStyle">@LiveMeasurement</span>
+                    </div>
                 }
             </div>
 
@@ -36,9 +39,13 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Apply" Disabled="!_hasSelection">
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Apply" Disabled="!_hasSelection || !IsSelectionValid">
             Apply Crop
         </MudButton>
+        @if (_hasSelection && !IsSelectionValid)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="ml-2">Selection too small (min 50×50 px)</MudText>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -70,6 +77,76 @@
     private double SelTop => Math.Min(_startYPct, _currentYPct);
     private double SelWidth => Math.Abs(_currentXPct - _startXPct);
     private double SelHeight => Math.Abs(_currentYPct - _startYPct);
+
+    /// <summary>
+    /// True if the selected area results in at least 50px remaining in both dimensions.
+    /// </summary>
+    private bool IsSelectionValid
+    {
+        get
+        {
+            const int MinPixels = 50;
+            var remainingWidth = VideoWidth - _cropLeft - _cropRight;
+            var remainingHeight = VideoHeight - _cropTop - _cropBottom;
+            return remainingWidth >= MinPixels && remainingHeight >= MinPixels;
+        }
+    }
+
+    /// <summary>
+    /// Live measurement text showing the resulting visible area dimensions.
+    /// </summary>
+    private string LiveMeasurement
+    {
+        get
+        {
+            var w = Math.Max(0, VideoWidth - _cropLeft - _cropRight);
+            var h = Math.Max(0, VideoHeight - _cropTop - _cropBottom);
+            return $"{w} × {h}";
+        }
+    }
+
+    /// <summary>
+    /// Style for the measurement label — red when below minimum, white otherwise.
+    /// </summary>
+    private string MeasurementStyle
+    {
+        get
+        {
+            var color = IsSelectionValid ? "rgba(255,255,255,0.95)" : "rgba(255,80,80,0.95)";
+            return $"font-size:0.75rem; font-weight:600; color:{color}; " +
+                   "background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:3px; " +
+                   "pointer-events:none; white-space:nowrap;";
+        }
+    }
+
+    /// <summary>
+    /// Positions the measurement label outside the selection box.
+    /// Above the box when dragging downward, below the box when dragging upward.
+    /// Horizontally centered on the selection.
+    /// </summary>
+    private string MeasurementPositionStyle
+    {
+        get
+        {
+            // Dragging downward: current Y > start Y → place label above the box (at the start point)
+            bool draggingDown = _currentYPct >= _startYPct;
+            var centerX = SelLeft + SelWidth / 2;
+
+            if (draggingDown)
+            {
+                // Above the box top edge
+                return $"position:absolute; top:{SelTop:F2}%; left:{centerX:F2}%; " +
+                       "transform:translate(-50%, -100%) translateY(-4px); pointer-events:none;";
+            }
+            else
+            {
+                // Below the box bottom edge
+                var bottom = SelTop + SelHeight;
+                return $"position:absolute; top:{bottom:F2}%; left:{centerX:F2}%; " +
+                       "transform:translate(-50%, 0%) translateY(4px); pointer-events:none;";
+            }
+        }
+    }
 
     private string SelectionStyle =>
         $"position:absolute; left:{SelLeft:F2}%; top:{SelTop:F2}%; width:{SelWidth:F2}%; height:{SelHeight:F2}%; " +
@@ -113,6 +190,9 @@
 
         _currentXPct = pctX;
         _currentYPct = pctY;
+
+        // Calculate crop values live during drag for the measurement display
+        CalculateCropValues();
     }
 
     private void OnPointerUp(PointerEventArgs e)

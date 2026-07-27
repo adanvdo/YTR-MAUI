@@ -75,7 +75,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         }
 
         // If post-processing is needed and we have format URLs, process directly from stream.
-        if (request is not null && HasPostProcessing(request) && streamKind != StreamKind.Audio)
+        if (request is not null && HasPostProcessing(request))
         {
             var streamResult = await ProcessFromStreamAsync(url, null, streamKind, request, progress, output, ct);
             if (streamResult.IsSuccess)
@@ -125,7 +125,7 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         progress?.Report(new DownloadProgress { State = DownloadState.PreProcessing });
 
         // If post-processing is needed, try stream-based processing first.
-        if (request is not null && HasPostProcessing(request) && streamKind != StreamKind.Audio)
+        if (request is not null && HasPostProcessing(request))
         {
             var streamResult = await ProcessFromStreamAsync(url, formatPair, streamKind, request, progress, output, ct);
             if (streamResult.IsSuccess)
@@ -242,15 +242,43 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
     {
         output?.Report("Resolving stream URLs...");
 
-        // Determine format string
-        var formatString = formatPair?.FormatId ?? $"bestvideo+bestaudio/best";
+        // Determine format string based on stream kind
+        string formatString;
+        if (formatPair is not null)
+        {
+            formatString = formatPair.FormatId;
+        }
+        else if (streamKind == StreamKind.Audio)
+        {
+            var maxSize = request.MaxFileSizeMb > 0 ? $"[filesize<={request.MaxFileSizeMb}M]" : "";
+            formatString = $"bestaudio{maxSize}";
+        }
+        else
+        {
+            var maxRes = request.MaxResolutionPixels > 0 ? $"[height<={request.MaxResolutionPixels}]" : "";
+            var maxSize = request.MaxFileSizeMb > 0 ? $"[filesize<={request.MaxFileSizeMb}M]" : "";
+            formatString = $"bestvideo{maxRes}{maxSize}+bestaudio/best{maxRes}{maxSize}";
+        }
+
         var urlsResult = await _ytDlp.GetFormatUrlsAsync(url, formatString, ct);
         if (urlsResult.IsFailure || urlsResult.Value!.Count == 0)
             return Result<DownloadRecord>.Failure(urlsResult.Error ?? "No stream URLs resolved.");
 
         var streamUrls = urlsResult.Value!;
-        var videoUrl = streamUrls[0];
-        var audioUrl = streamUrls.Count > 1 ? streamUrls[1] : null;
+        string videoUrl;
+        string? audioUrl;
+
+        if (streamKind == StreamKind.Audio)
+        {
+            // Audio-only: the single URL is the audio stream
+            videoUrl = string.Empty;
+            audioUrl = streamUrls[0];
+        }
+        else
+        {
+            videoUrl = streamUrls[0];
+            audioUrl = streamUrls.Count > 1 ? streamUrls[1] : null;
+        }
 
         // Build FFmpeg args for direct stream processing
         output?.Report("Downloading and processing...");
@@ -261,10 +289,20 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         EnsureDirectoryExists(outputDir);
 
         var fileName = $"{DateTime.Now:MMddyyyyHHmmss}";
-        var targetFormat = request.ConvertVideo ?? (formatPair?.VideoFormat is not null
-            ? CodecMap.GetBestContainerForCodec(formatPair.VideoFormat.VideoCodec)
-            : VideoFormat.Mp4);
-        var ext = targetFormat == VideoFormat.Gif ? ".gif" : VideoFormatToExtension(targetFormat);
+        string ext;
+        if (streamKind == StreamKind.Audio)
+        {
+            // Audio-only: use audio format extension
+            var targetAudioFormat = request.ConvertAudio ?? AudioFormat.Mp3;
+            ext = AudioFormatToExtension(targetAudioFormat);
+        }
+        else
+        {
+            var targetFormat = request.ConvertVideo ?? (formatPair?.VideoFormat is not null
+                ? CodecMap.GetBestContainerForCodec(formatPair.VideoFormat.VideoCodec)
+                : VideoFormat.Mp4);
+            ext = targetFormat == VideoFormat.Gif ? ".gif" : VideoFormatToExtension(targetFormat);
+        }
         var outputPath = Path.Combine(outputDir, fileName + ext);
 
         // For progress calculation, ffmpeg needs to know the total expected output duration.
@@ -375,7 +413,18 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         }
 
         // Determine if we can use segment-only (stream copy) path
-        bool hasSegment = request.SegmentStart.HasValue && request.SegmentDuration.HasValue;
+        // If only start is provided (no duration), calculate duration from file length
+        // If only duration is provided (no start), treat as trimming from beginning
+        var effectiveSegmentStart = request.SegmentStart;
+        var effectiveSegmentDuration = request.SegmentDuration;
+        if (effectiveSegmentStart.HasValue && !effectiveSegmentDuration.HasValue && fileDuration.HasValue)
+        {
+            effectiveSegmentDuration = fileDuration.Value - effectiveSegmentStart.Value;
+            if (effectiveSegmentDuration.Value < TimeSpan.FromSeconds(1))
+                effectiveSegmentDuration = TimeSpan.FromSeconds(1);
+        }
+
+        bool hasSegment = effectiveSegmentStart.HasValue || effectiveSegmentDuration.HasValue;
         bool hasCrop = validatedCrop is not null;
         bool hasConvert = (request.ConvertVideo.HasValue && request.ConvertVideo != VideoFormat.Unspecified)
                        || (request.ConvertAudio.HasValue && request.ConvertAudio != AudioFormat.Unspecified);
@@ -402,20 +451,26 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         // If only segmenting (no crop, no convert), use fast stream-copy extraction
         if (hasSegment && !hasCrop && !hasConvert)
         {
-            var segOutput = GenerateProcessedPath(filePath, "_seg");
-            output?.Report("Extracting segment (stream copy)...");
-            var segResult = await _mediaProcessor.ExtractSegmentAsync(
-                filePath, request.SegmentStart!.Value, request.SegmentDuration!.Value,
-                segOutput, progress: ffmpegProgress, ct: ct);
+            var segStart = effectiveSegmentStart ?? TimeSpan.Zero;
+            var segDur = effectiveSegmentDuration ?? (fileDuration.HasValue ? fileDuration.Value - segStart : (TimeSpan?)null);
 
-            if (segResult.IsSuccess)
+            if (segDur.HasValue)
             {
-                TryDeleteFile(filePath);
-                return segResult.Value!;
-            }
+                var segOutput = GenerateProcessedPath(filePath, "_seg");
+                output?.Report("Extracting segment (stream copy)...");
+                var segResult = await _mediaProcessor.ExtractSegmentAsync(
+                    filePath, segStart, segDur.Value,
+                    segOutput, progress: ffmpegProgress, ct: ct);
 
-            _logger.LogWarning("Segment extraction failed: {Error}", segResult.Error);
-            return filePath;
+                if (segResult.IsSuccess)
+                {
+                    TryDeleteFile(filePath);
+                    return segResult.Value!;
+                }
+
+                _logger.LogWarning("Segment extraction failed: {Error}", segResult.Error);
+                return filePath;
+            }
         }
 
         // Single-pass: combine segment + crop + convert into one ffmpeg call
@@ -436,8 +491,8 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
         output?.Report("Processing (single pass)...");
         var result = await _mediaProcessor.PostProcessSinglePassAsync(
             filePath, outputPath,
-            segmentStart: hasSegment ? request.SegmentStart : null,
-            segmentDuration: hasSegment ? request.SegmentDuration : null,
+            segmentStart: hasSegment ? effectiveSegmentStart : null,
+            segmentDuration: hasSegment ? effectiveSegmentDuration : null,
             cropValues: validatedCrop,
             videoFormat: videoFormat,
             audioFormat: audioFormat,

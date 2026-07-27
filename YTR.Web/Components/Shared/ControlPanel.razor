@@ -39,8 +39,10 @@
                             <MudSwitch @bind-Value="_segmentEnabled" Label="Enable" Color="Color.Primary"
                                        Size="Size.Small" Class="cp-toggle" />
                             <TimeSpanPicker Value="_segmentStart" ValueChanged="OnSegmentStartChanged"
+                                           OnBlurred="OnSegmentBlurred"
                                            Label="Start" Disabled="!_segmentEnabled" />
                             <TimeSpanPicker Value="_segmentEnd" ValueChanged="OnSegmentEndChanged"
+                                           OnBlurred="OnSegmentBlurred"
                                            Disabled="!_segmentEnabled"
                                            Label="@(_segmentEndMode == SegmentMode.Duration ? "Duration" : "End Time")" />
                         </MudStack>
@@ -72,10 +74,10 @@
                                 </MudButton>
                             }
                             <MudGrid Spacing="1">
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" Label="Top" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" Label="Bottom" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" Label="Left" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
-                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" Label="Right" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropTop" @bind-Value:after="OnCropValueChanged" Label="Top" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropBottom" @bind-Value:after="OnCropValueChanged" Label="Bottom" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropLeft" @bind-Value:after="OnCropValueChanged" Label="Left" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
+                                <MudItem xs="6"><MudNumericField @bind-Value="_cropRight" @bind-Value:after="OnCropValueChanged" Label="Right" Min="0" Margin="Margin.Dense" Placeholder="0" Disabled="!_cropEnabled" @onfocus="SelectAllText" /></MudItem>
                             </MudGrid>
                         </MudStack>
                     </ChildContent>
@@ -302,6 +304,8 @@
     [Parameter] public FormatPair? SelectedPair { get; set; }
     [Parameter] public string? ThumbnailUrl { get; set; }
     [Parameter] public TimeSpan? MediaDuration { get; set; }
+    [Parameter] public int? MediaWidth { get; set; }
+    [Parameter] public int? MediaHeight { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadVideo { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadAudio { get; set; }
     [Parameter] public EventCallback<DownloadRequest> OnDownloadBest { get; set; }
@@ -518,6 +522,41 @@
     }
 
     /// <summary>
+    /// Updates the crop values from an external source (e.g., after metadata-based revalidation).
+    /// Updates the panel's state and header caption.
+    /// </summary>
+    public void UpdateCropValues(int top, int bottom, int left, int right)
+    {
+        _cropTop = top > 0 ? top : null;
+        _cropBottom = bottom > 0 ? bottom : null;
+        _cropLeft = left > 0 ? left : null;
+        _cropRight = right > 0 ? right : null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Updates the segment values from an external source (e.g., after metadata-based revalidation).
+    /// Converts SegmentStart/SegmentDuration back to the panel's start/end fields respecting the current mode.
+    /// </summary>
+    public void UpdateSegmentValues(TimeSpan? start, TimeSpan? duration)
+    {
+        _segmentStart = start;
+
+        if (duration.HasValue)
+        {
+            _segmentEnd = _segmentEndMode == SegmentMode.Duration
+                ? duration
+                : (start ?? TimeSpan.Zero) + duration.Value;
+        }
+        else
+        {
+            _segmentEnd = null;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
     /// Called when the URL input changes. Resets segment/crop and flashes
     /// a warning on convert/limits if they have non-default, non-locked values.
     /// </summary>
@@ -613,40 +652,41 @@
         // Calculate segment duration based on mode (only if segment is enabled)
         TimeSpan? segStart = null;
         TimeSpan? segDuration = null;
-        if (_segmentEnabled && _segmentStart.HasValue && _segmentEnd.HasValue)
+        if (_segmentEnabled && (_segmentStart.HasValue || _segmentEnd.HasValue))
         {
+            // Use explicit start if set; leave null (meaning beginning) otherwise
             segStart = _segmentStart;
-            segDuration = _segmentEndMode == SegmentMode.Duration
-                ? _segmentEnd
-                : _segmentEnd - _segmentStart;
+            var effectiveStart = segStart ?? TimeSpan.Zero;
+
+            if (_segmentEnd.HasValue)
+            {
+                segDuration = _segmentEndMode == SegmentMode.Duration
+                    ? _segmentEnd
+                    : _segmentEnd - effectiveStart;
+            }
+            else if (EffectiveDuration.HasValue)
+            {
+                // No end time specified — use media duration as the implicit end
+                segDuration = EffectiveDuration.Value - effectiveStart;
+            }
 
             // Final safety: clamp to media duration if known
             var maxDuration = EffectiveDuration;
             if (maxDuration.HasValue)
             {
-                if (segStart.Value >= maxDuration.Value)
+                if (segStart.HasValue && segStart.Value >= maxDuration.Value)
                     segStart = maxDuration.Value - TimeSpan.FromSeconds(1);
-                if (segStart.Value < TimeSpan.Zero)
+                if (segStart.HasValue && segStart.Value < TimeSpan.Zero)
                     segStart = TimeSpan.Zero;
-                if (segStart.Value + segDuration.Value > maxDuration.Value)
-                    segDuration = maxDuration.Value - segStart.Value;
+
+                var clampStart = segStart ?? TimeSpan.Zero;
+                if (segDuration.HasValue && clampStart + segDuration.Value > maxDuration.Value)
+                    segDuration = maxDuration.Value - clampStart;
             }
 
-            // Ensure duration is at least 1s
-            if (segDuration.Value < TimeSpan.FromSeconds(1))
+            // Ensure duration is at least 1s when set
+            if (segDuration.HasValue && segDuration.Value < TimeSpan.FromSeconds(1))
                 segDuration = TimeSpan.FromSeconds(1);
-        }
-        else if (_segmentEnabled && _segmentStart.HasValue)
-        {
-            segStart = _segmentStart;
-
-            // Clamp start if it exceeds duration
-            var maxDuration = EffectiveDuration;
-            if (maxDuration.HasValue && segStart.Value >= maxDuration.Value)
-            {
-                segStart = maxDuration.Value - TimeSpan.FromSeconds(1);
-                if (segStart.Value < TimeSpan.Zero) segStart = TimeSpan.Zero;
-            }
         }
 
         return new DownloadRequest
@@ -730,12 +770,17 @@
                 ? TimeSpan.FromSeconds(1)
                 : value.Value + TimeSpan.FromSeconds(1);
 
+            if (maxDuration.HasValue && minEnd > maxDuration.Value)
+                minEnd = maxDuration.Value;
+
             if (!_segmentEnd.HasValue || _segmentEnd.Value < minEnd)
             {
-                // Clamp to max duration if known
-                if (maxDuration.HasValue && minEnd > maxDuration.Value)
-                    minEnd = maxDuration.Value;
                 _segmentEnd = minEnd;
+            }
+            else if (_segmentEndMode != SegmentMode.Duration && _segmentEnd.HasValue
+                     && maxDuration.HasValue && _segmentEnd.Value > maxDuration.Value)
+            {
+                _segmentEnd = maxDuration.Value;
             }
         }
     }
@@ -789,6 +834,79 @@
         }
 
         _segmentEnd = value;
+    }
+
+    /// <summary>
+    /// Called when focus leaves a segment time picker field.
+    /// Re-validates both segment values to ensure they're consistent with known metadata.
+    /// </summary>
+    private void OnSegmentBlurred()
+    {
+        var maxDuration = EffectiveDuration;
+
+        // Re-validate start
+        if (_segmentStart.HasValue && maxDuration.HasValue)
+        {
+            var maxStart = maxDuration.Value - TimeSpan.FromSeconds(1);
+            if (maxStart < TimeSpan.Zero) maxStart = TimeSpan.Zero;
+            if (_segmentStart.Value > maxStart)
+                _segmentStart = maxStart;
+        }
+
+        // Re-validate end relative to start and duration
+        if (_segmentEnd.HasValue)
+        {
+            var effectiveStart = _segmentStart ?? TimeSpan.Zero;
+
+            // Minimum end: at least 1s after start (or 1s in duration mode)
+            var minEnd = _segmentEndMode == SegmentMode.Duration
+                ? TimeSpan.FromSeconds(1)
+                : effectiveStart + TimeSpan.FromSeconds(1);
+
+            if (_segmentEnd.Value < minEnd)
+                _segmentEnd = minEnd;
+
+            // Clamp to media duration if known
+            if (maxDuration.HasValue)
+            {
+                if (_segmentEndMode == SegmentMode.Duration)
+                {
+                    var maxAllowed = maxDuration.Value - effectiveStart;
+                    if (maxAllowed < TimeSpan.FromSeconds(1)) maxAllowed = TimeSpan.FromSeconds(1);
+                    if (_segmentEnd.Value > maxAllowed)
+                        _segmentEnd = maxAllowed;
+                }
+                else
+                {
+                    if (_segmentEnd.Value > maxDuration.Value)
+                        _segmentEnd = maxDuration.Value;
+                }
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Validates and clamps crop values when any crop field loses focus.
+    /// Ensures at least 50px remain in each dimension after cropping.
+    /// </summary>
+    private void OnCropValueChanged()
+    {
+        // Use selected format dimensions, falling back to metadata dimensions
+        var videoWidth = SelectedPair?.VideoFormat?.Width ?? MediaWidth;
+        var videoHeight = SelectedPair?.VideoFormat?.Height ?? MediaHeight;
+
+        // Can only validate if we know the video dimensions
+        if (!videoWidth.HasValue || !videoHeight.HasValue) return;
+
+        var margins = new[] { _cropTop ?? 0, _cropBottom ?? 0, _cropLeft ?? 0, _cropRight ?? 0 };
+        var clamped = CropHelper.ClampMargins(margins, videoWidth.Value, videoHeight.Value);
+
+        _cropTop = clamped[0] > 0 ? clamped[0] : null;
+        _cropBottom = clamped[1] > 0 ? clamped[1] : null;
+        _cropLeft = clamped[2] > 0 ? clamped[2] : null;
+        _cropRight = clamped[3] > 0 ? clamped[3] : null;
     }
 
     private async Task OpenCropTool()

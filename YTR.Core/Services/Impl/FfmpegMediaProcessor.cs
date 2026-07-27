@@ -147,21 +147,35 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         var outputArgs = new List<string>();
 
         // Seek before each input for fast seeking (same as original app)
-        if (start.HasValue)
-            inputArgs.Add($"-ss {FormatTime(start.Value)}");
+        // Skip -ss 0 — it's unnecessary and can cause A/V desync with HTTP streams
+        bool hasSeek = start.HasValue && start.Value > TimeSpan.Zero;
+        if (hasSeek)
+            inputArgs.Add($"-ss {FormatTime(start!.Value)}");
 
-        // Video input
-        inputArgs.Add($"-i \"{videoUrl}\"");
+        // Primary input: video URL or audio URL (for audio-only downloads)
+        if (!string.IsNullOrEmpty(videoUrl))
+        {
+            inputArgs.Add($"-i \"{videoUrl}\"");
+        }
 
-        // Audio input (separate stream)
+        // Audio input (separate stream, or primary input for audio-only)
         if (!string.IsNullOrEmpty(audioUrl))
         {
-            if (start.HasValue)
-                inputArgs.Add($"-ss {FormatTime(start.Value)}");
-            inputArgs.Add($"-i \"{audioUrl}\"");
-            // Explicit stream mapping (like original app: -map 0:0 -map 1:0)
-            mapArgs.Add("-map 0:0");
-            mapArgs.Add("-map 1:0");
+            if (string.IsNullOrEmpty(videoUrl))
+            {
+                // Audio-only: audioUrl is the primary (and only) input
+                inputArgs.Add($"-i \"{audioUrl}\"");
+            }
+            else
+            {
+                // Separate audio stream: add seek and second input
+                if (hasSeek)
+                    inputArgs.Add($"-ss {FormatTime(start!.Value)}");
+                inputArgs.Add($"-i \"{audioUrl}\"");
+                // Explicit stream mapping (like original app: -map 0:0 -map 1:0)
+                mapArgs.Add("-map 0:0");
+                mapArgs.Add("-map 1:0");
+            }
         }
 
         // Duration limit — placed as output arg (after inputs), not input arg
@@ -177,11 +191,22 @@ public sealed partial class FfmpegMediaProcessor : IMediaProcessor
         }
 
         // Determine if we need explicit codec specification
+        bool isAudioOnly = string.IsNullOrEmpty(videoUrl);
         bool needsReencode = cropMargins is { Length: 4 }
             || videoFormat != VideoFormat.Unspecified
             || audioFormat != AudioFormat.Unspecified;
 
-        if (videoFormat == VideoFormat.Gif)
+        if (isAudioOnly)
+        {
+            // Audio-only: only apply audio codec
+            if (audioFormat != AudioFormat.Unspecified)
+            {
+                var aCodec = Models.CodecMap.GetAudioCodecForFormat(audioFormat);
+                codecArgs.Add($"-c:a {aCodec.Encoder}");
+            }
+            // else: no codec args, ffmpeg will choose based on output extension (stream copy if possible)
+        }
+        else if (videoFormat == VideoFormat.Gif)
         {
             filterArgs.Clear();
             filterArgs.Add("fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse");
