@@ -85,7 +85,7 @@ html, body {
     display: flex;
     flex: 1;
     overflow: hidden;
-    gap: 16px;
+    gap: 0;
 }
 
 .home-main {
@@ -94,6 +94,7 @@ html, body {
     flex-direction: column;
     overflow: hidden;
     padding-right: 0px;
+    min-width: 436px;
 }
 
 .home-fixed-top {
@@ -107,11 +108,37 @@ html, body {
     flex-direction: column;
 }
 
+.home-resize-grip {
+    width: 10px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+    touch-action: none;
+    z-index: 10;
+}
+
+.home-resize-grip:hover .home-resize-grip-handle,
+.home-resize-grip:active .home-resize-grip-handle {
+    background-color: var(--mud-palette-primary);
+    opacity: 1;
+}
+
+.home-resize-grip-handle {
+    width: 3px;
+    height: 48px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.2);
+    opacity: 0.6;
+    transition: background-color 0.15s, opacity 0.15s;
+}
+
 .home-sidebar {
     flex: 1;
     overflow-y: auto;
     min-width: 300px;
-    max-width: 380px;
 }
 
 .home-status {

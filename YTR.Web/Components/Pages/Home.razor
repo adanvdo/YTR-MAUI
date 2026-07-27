@@ -5,12 +5,13 @@
 @inject ISettingsService Settings
 @inject IPlatformService Platform
 @inject DownloadStateService State
+@inject IJSRuntime JS
 
 <PageTitle>YTR - Home</PageTitle>
 
 <div class="home-layout">
     <div class="home-content">
-        <div class="home-main">
+        <div class="home-main" style="@MainStyle">
             <div class="home-fixed-top">
                 <InputPanel OnUrlAnalyzed="OnUrlAnalyzed" OnUrlChanged="OnUrlChanged" IsLoading="_loadingFormats"
                            HasData="_metadata is not null" HasOptions="_hasOptions" OnReset="ResetAll" />
@@ -32,7 +33,16 @@
             </div>
         </div>
 
-        <div class="home-sidebar">
+        <div class="home-resize-grip" @ref="_gripElement"
+             @onpointerdown="OnGripPointerDown"
+             @onpointermove="OnGripPointerMove"
+             @onpointerup="OnGripPointerUp"
+             @onpointerdown:preventDefault
+             @onpointermove:preventDefault>
+            <div class="home-resize-grip-handle"></div>
+        </div>
+
+        <div class="home-sidebar" style="@SidebarStyle">
             <ControlPanel @ref="_controlPanel"
                           OnDownloadVideo="DownloadVideo"
                           OnDownloadAudio="DownloadAudio"
@@ -66,6 +76,62 @@
     private bool _hasFormatSelection;
     private bool _hasOptions;
     private string _currentUrl = string.Empty;
+
+    // Resize grip state
+    private const int MinMainWidth = 436;
+    private const int MinSidebarWidth = 300;
+    private const int GripWidth = 10;
+    private bool _resizing;
+    private double _resizeStartX;
+    private double _startSidebarWidth;
+    private double _maxSidebarWidth;
+    private double? _sidebarWidth;
+    private ElementReference _gripElement;
+
+    private string MainStyle => _sidebarWidth.HasValue
+        ? $"flex: 1; min-width: {MinMainWidth}px;"
+        : $"flex: 2; min-width: {MinMainWidth}px;";
+
+    private string SidebarStyle => _sidebarWidth.HasValue
+        ? $"width: {_sidebarWidth.Value:0}px; flex: none; min-width: {MinSidebarWidth}px;"
+        : $"min-width: {MinSidebarWidth}px;";
+
+    private async Task OnGripPointerDown(PointerEventArgs e)
+    {
+        _resizing = true;
+        _resizeStartX = e.ClientX;
+        _startSidebarWidth = _sidebarWidth ?? 340;
+
+        // Get available container width so we can enforce min-main-width
+        var contentWidth = await JS.InvokeAsync<double>("resizeGrip.getContentWidth", _gripElement);
+        _maxSidebarWidth = contentWidth > 0
+            ? contentWidth - MinMainWidth - GripWidth
+            : double.MaxValue;
+
+        await JS.InvokeVoidAsync("resizeGrip.capture", _gripElement, e.PointerId);
+    }
+
+    private void OnGripPointerMove(PointerEventArgs e)
+    {
+        if (!_resizing) return;
+
+        var delta = _resizeStartX - e.ClientX;
+        var newWidth = _startSidebarWidth + delta;
+
+        if (newWidth < MinSidebarWidth)
+            newWidth = MinSidebarWidth;
+        if (newWidth > _maxSidebarWidth)
+            newWidth = _maxSidebarWidth;
+
+        _sidebarWidth = newWidth;
+        StateHasChanged();
+    }
+
+    private async Task OnGripPointerUp(PointerEventArgs e)
+    {
+        _resizing = false;
+        await JS.InvokeVoidAsync("resizeGrip.release", _gripElement, e.PointerId);
+    }
 
     private async Task OnUrlChanged(string url)
     {
