@@ -1,16 +1,17 @@
-<MudPaper Class="@($"pa-4 {Class}")" Elevation="1">
+<MudPaper Class="@($"pa-4 {Class}")" Elevation="1" Style="max-height:150px;overflow:hidden;">
     @if (Metadata is not null)
     {
-        <MudGrid>
+        <div style="display:flex;gap:16px;height:100%;max-height:118px;">
             @if (!string.IsNullOrEmpty(Metadata.ThumbnailUrl))
             {
-                <MudItem xs="12" sm="4">
+                <div style="flex-shrink:0;">
                     <MudImage Src="@Metadata.ThumbnailUrl" Alt="Thumbnail"
-                              ObjectFit="ObjectFit.Cover" Class="rounded" Style="width:100%;" />
-                </MudItem>
+                              ObjectFit="ObjectFit.Cover" Class="rounded"
+                              Style="max-height:118px;width:auto;height:100%;" />
+                </div>
             }
-            <MudItem xs="12" sm="@(string.IsNullOrEmpty(Metadata.ThumbnailUrl) ? 12 : 8)">
-                <MudText Typo="Typo.h6">@Metadata.Title</MudText>
+            <div style="overflow-y:auto;overflow-x:hidden;min-width:0;flex:1;">
+                <MudText Typo="Typo.h6" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@Metadata.Title</MudText>
                 @if (Metadata.Duration.HasValue)
                 {
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
@@ -23,12 +24,12 @@
                 }
                 @if (!string.IsNullOrEmpty(Metadata.Description))
                 {
-                    <MudText Typo="Typo.body2" Class="mt-2" Style="max-height:100px;overflow-y:auto;overflow-x:hidden;word-break:break-word;">
+                    <MudText Typo="Typo.body2" Class="mt-2" Style="word-break:break-word;">
                         @Metadata.Description
                     </MudText>
                 }
-            </MudItem>
-        </MudGrid>
+            </div>
+        </div>
     }
     else
     {
