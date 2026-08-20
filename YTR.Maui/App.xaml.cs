@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using YTR.Core.Services;
 
 namespace YTR.Maui;
@@ -7,6 +8,7 @@ public partial class App : Application
 {
     private readonly AppStartup _startup;
     private ISettingsService? _settings;
+    private ILogger<App>? _logger;
     private Window? _mainWindow;
 
 #if WINDOWS
@@ -61,6 +63,19 @@ public partial class App : Application
     {
         InitializeComponent();
         _startup = startup;
+
+        // Wire up global unhandled exception handlers so crashes are logged
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex)
+                _logger?.LogCritical(ex, "Unhandled AppDomain exception.");
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            _logger?.LogError(e.Exception, "Unobserved task exception.");
+            e.SetObserved();
+        };
     }
 
     protected override Window CreateWindow(IActivationState? activationState)
@@ -81,6 +96,7 @@ public partial class App : Application
         if (services is null) return;
 
         _settings = services.GetService<ISettingsService>();
+        _logger = services.GetService<ILogger<App>>();
 
         // Single instance check
         var guard = services.GetService<Platforms.Windows.SingleInstanceGuard>();
@@ -100,7 +116,7 @@ public partial class App : Application
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Startup failed: {ex.Message}");
+                _logger?.LogCritical(ex, "Application startup initialization failed.");
                 return;
             }
 
@@ -116,6 +132,22 @@ public partial class App : Application
                 // Quick download handler
                 var quickDl = services.GetService<Platforms.Windows.QuickDownloadHandler>();
                 quickDl?.Initialize();
+
+                // When "View Details" is clicked on a quick download error, restore the main window
+                // and pass the error to the Blazor DownloadStateService for display.
+                if (quickDl is not null)
+                {
+                    quickDl.ViewErrorDetailsRequested += error =>
+                    {
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            RestoreWindow(_mainWindow!);
+                            // Push error to the Blazor UI via DownloadStateService
+                            var downloadState = services.GetService<YTR.Web.Services.DownloadStateService>();
+                            downloadState?.ReportError(error);
+                        });
+                    };
+                }
             });
         });
 

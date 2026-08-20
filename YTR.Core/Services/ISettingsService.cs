@@ -15,6 +15,7 @@ public interface ISettingsService
     HistoryOptions History { get; }
     AudioPreferencesOptions AudioPreferences { get; }
     WindowStateOptions WindowState { get; }
+    LoggingOptions Logging { get; }
 
     Task LoadAsync(CancellationToken ct = default);
     Task SaveAsync(CancellationToken ct = default);

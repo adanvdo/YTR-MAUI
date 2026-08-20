@@ -216,7 +216,10 @@ public sealed partial class YtDlpService : IYtDlpService
             return Result<string>.Failure("Download cancelled.");
 
         if (!result.Success)
+        {
+            _logger.LogError("[yt-dlp] DownloadBest failed | URL: {Url} | Error: {Error}", url, result.StandardError.Trim());
             return Result<string>.Failure($"Download failed: {result.StandardError.Trim()}");
+        }
 
         // Try to find the output file from stdout if not captured via progress
         downloadedFile ??= ExtractFilePathFromOutput(result.StandardOutput);
@@ -275,7 +278,10 @@ public sealed partial class YtDlpService : IYtDlpService
             return Result<string>.Failure("Download cancelled.");
 
         if (!result.Success)
+        {
+            _logger.LogError("[yt-dlp] DownloadFormat failed | URL: {Url} | FormatId: {FormatId} | Error: {Error}", url, formatId, result.StandardError.Trim());
             return Result<string>.Failure($"Download failed: {result.StandardError.Trim()}");
+        }
 
         downloadedFile ??= ExtractFilePathFromOutput(result.StandardOutput);
 

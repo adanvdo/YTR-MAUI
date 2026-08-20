@@ -96,7 +96,10 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             ct: ct);
 
         if (downloadResult.IsFailure)
+        {
+            _logger.LogError("Download failed for {Url}: {Error}", url, downloadResult.Error);
             return Result<DownloadRecord>.Failure(downloadResult.Error!);
+        }
 
         var filePath = downloadResult.Value!;
         filePath = await PostProcessAsync(filePath, request, streamKind, progress, output, ct);
@@ -153,7 +156,10 @@ public sealed class DownloadOrchestrator : IDownloadOrchestrator
             ct: ct);
 
         if (downloadResult.IsFailure)
+        {
+            _logger.LogError("Format download failed for {Url} (format: {Format}): {Error}", url, formatPair.FormatId, downloadResult.Error);
             return Result<DownloadRecord>.Failure(downloadResult.Error!);
+        }
 
         var filePath = downloadResult.Value!;
         filePath = await PostProcessAsync(filePath, effectiveRequest, streamKind, progress, output, ct);

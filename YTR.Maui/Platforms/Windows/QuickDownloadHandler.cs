@@ -24,6 +24,12 @@ public sealed class QuickDownloadHandler
     private readonly ISettingsService _settings;
     private readonly ILogger<QuickDownloadHandler> _logger;
 
+    /// <summary>
+    /// Raised when the user clicks "View Details" on a failed quick download.
+    /// The main app should restore its window and display the full error.
+    /// </summary>
+    public event Action<string>? ViewErrorDetailsRequested;
+
     public QuickDownloadHandler(
         IHotkeyService hotkey,
         ITrayService tray,
@@ -60,6 +66,7 @@ public sealed class QuickDownloadHandler
         {
             var inputWindow = new QuickDownloadInputWindow();
             inputWindow.DownloadRequested += url => _ = ExecuteDownloadAsync(url, inputWindow);
+            inputWindow.ViewDetailsRequested += error => ViewErrorDetailsRequested?.Invoke(error);
             inputWindow.Activate();
         });
     }
@@ -196,6 +203,7 @@ public sealed class QuickDownloadHandler
                 var window = new QuickDownloadProgressWindow();
                 window.SetUrl(url);
                 window.UpdateProgress($"Downloading from {analysis.Platform}...", 0, isIndeterminate: true);
+                window.ViewDetailsRequested += error => ViewErrorDetailsRequested?.Invoke(error);
                 window.Activate();
                 return window;
             });

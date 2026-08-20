@@ -8,5 +8,6 @@ public interface IFolderPickerService
     /// <summary>
     /// Opens a folder picker dialog. Returns the selected path, or null if cancelled.
     /// </summary>
-    Task<string?> PickFolderAsync();
+    /// <param name="startDirectory">Optional directory to open the picker at.</param>
+    Task<string?> PickFolderAsync(string? startDirectory = null);
 }

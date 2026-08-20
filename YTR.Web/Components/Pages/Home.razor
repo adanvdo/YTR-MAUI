@@ -8,6 +8,7 @@
 @inject IHistoryService HistoryService
 @inject DownloadStateService State
 @inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>YTR - Home</PageTitle>
 
@@ -66,6 +67,23 @@
     </div>
 </div>
 
+@if (_showErrorDialog)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="9999" OnClick="DismissError">
+        <MudPaper Class="pa-6" Style="max-width:600px; margin:auto; margin-top:15vh;" Elevation="8" @onclick:stopPropagation="true">
+            <MudText Typo="Typo.h6" Color="Color.Error" Class="mb-2">Download Failed</MudText>
+            <MudText Typo="Typo.body2" Style="white-space:pre-wrap; word-break:break-word;">@_errorDetails</MudText>
+            <MudAlert Severity="Severity.Info" Class="mt-4" Dense="true" NoIcon="false">
+                These errors are usually caused by out-of-date dependencies.<br/>
+                Visit <b>Settings → About</b> to check for available dependency updates.
+            </MudAlert>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="DismissError">Close</MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudOverlay>
+}
+
 @code {
     private MediaMetadata? _metadata;
     private IReadOnlyList<FormatInfo>? _formats;
@@ -79,6 +97,8 @@
     private bool _hasFormatSelection;
     private bool _hasOptions;
     private string _currentUrl = string.Empty;
+    private bool _showErrorDialog;
+    private string? _errorDetails;
 
     [SupplyParameterFromQuery(Name = "url")]
     public string? InitialUrl { get; set; }
@@ -108,6 +128,9 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
+        // Subscribe to error events from the download state service
+        State.OnErrorOccurred += OnDownloadError;
 
         // Handle "Use URL" navigation from history
         if (!string.IsNullOrWhiteSpace(InitialUrl))
@@ -466,8 +489,37 @@
         }
         else
         {
-            State.UpdateStatus($"Failed: {result.Error}");
+            State.ReportError(result.Error ?? "Download failed.");
         }
+    }
+
+    private void OnDownloadError(string error)
+    {
+        _errorDetails = error;
+        _showErrorDialog = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Called externally (e.g. from QuickDownloadHandler "View Details") to show full error in the main app.
+    /// </summary>
+    public void ShowErrorDetails(string error)
+    {
+        _errorDetails = error;
+        _showErrorDialog = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void DismissError()
+    {
+        _showErrorDialog = false;
+        _errorDetails = null;
+        State.ClearError();
+    }
+
+    public void Dispose()
+    {
+        State.OnErrorOccurred -= OnDownloadError;
     }
 
     /// <summary>

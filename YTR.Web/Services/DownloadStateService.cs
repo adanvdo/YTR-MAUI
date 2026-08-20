@@ -63,6 +63,34 @@ public sealed class DownloadStateService
         OnStateChanged?.Invoke();
     }
 
+    // Error details (for showing full error info in the UI)
+    public string? LastError { get; private set; }
+    public event Action<string>? OnErrorOccurred;
+
+    /// <summary>
+    /// Reports a download error with full details. Triggers the OnErrorOccurred event
+    /// so UI components can display an error dialog/alert.
+    /// </summary>
+    public void ReportError(string error)
+    {
+        LastError = error;
+        _statusMessage = $"Failed: {TruncateForStatus(error)}";
+        _currentProgress = new() { State = DownloadState.Error };
+        OnErrorOccurred?.Invoke(error);
+        OnStateChanged?.Invoke();
+    }
+
+    public void ClearError()
+    {
+        LastError = null;
+    }
+
+    private static string TruncateForStatus(string text)
+    {
+        const int maxLen = 80;
+        return text.Length <= maxLen ? text : text[..maxLen] + "…";
+    }
+
     // Playlist progress
     public int PlaylistCompleted { get; private set; }
     public int PlaylistTotal { get; private set; }

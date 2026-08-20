@@ -4,6 +4,7 @@
 @inject IAppUpdateService AppUpdater
 @inject IDependencyUpdateService DependencyUpdater
 @inject IHotkeyService HotkeyService
+@inject IPlatformService Platform
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -161,6 +162,27 @@
                             </MudSelect>
                             <MudNumericField @bind-Value="SettingsService.Restrictions.MaxFileSizeMb"
                                             Label="Max File Size (MB, 0 = unlimited)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                        </MudStack>
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Error Logs</MudText>
+                        <MudStack Spacing="1">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudTextField @bind-Value="SettingsService.Logging.LogDirectory"
+                                            Label="Log Directory" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
+                                            Placeholder="@_defaultLogDirectory" />
+                                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                                            OnClick="PickLogFolder" title="Browse" />
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
+                                Directory where error log files are stored. Leave empty to use the default location. Changes take effect on next launch.
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
+                                Current: @EffectiveLogDirectory
+                            </MudText>
                         </MudStack>
                     </div>
                 </MudItem>
@@ -426,7 +448,10 @@
 
     private async Task PickFolder(bool isVideo)
     {
-        var path = await FolderPicker.PickFolderAsync();
+        var currentPath = isVideo
+            ? SettingsService.Download.VideoDownloadPath
+            : SettingsService.Download.AudioDownloadPath;
+        var path = await FolderPicker.PickFolderAsync(currentPath);
         if (path is not null)
         {
             if (isVideo)
@@ -436,6 +461,24 @@
             StateHasChanged();
         }
     }
+
+    private async Task PickLogFolder()
+    {
+        var startDir = EffectiveLogDirectory;
+        var path = await FolderPicker.PickFolderAsync(startDir);
+        if (path is not null)
+        {
+            SettingsService.Logging.LogDirectory = path;
+            StateHasChanged();
+        }
+    }
+
+    private string _defaultLogDirectory => Path.Combine(Platform.AppDataDirectory, "Logs");
+
+    private string EffectiveLogDirectory =>
+        string.IsNullOrWhiteSpace(SettingsService.Logging.LogDirectory)
+            ? _defaultLogDirectory
+            : SettingsService.Logging.LogDirectory;
 
     private static string GetCurrentVersion()
     {

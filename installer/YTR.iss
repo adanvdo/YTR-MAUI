@@ -1,9 +1,9 @@
-; YTR Inno Setup Script
+﻿; YTR Inno Setup Script
 ; Requires Inno Setup 7.x — https://jrsoftware.org/isinfo.php
 
 #define MyAppName "YTR"
 ; Patched automatically by publish-windows.bat from Directory.Build.props
-#define MyAppVersion "1.0.0.0"
+#define MyAppVersion "1.1.0.0"
 #define MyAppPublisher "JAMGALACTIC"
 #define MyAppURL "https://jamgalactic.com"
 #define MyAppExeName "YTR.exe"
@@ -24,7 +24,7 @@ DisableProgramGroupPage=yes
 OutputDir=..\publish\installer
 OutputBaseFilename=YTR-Setup
 Compression=lzma2/ultra64
-SolidCompression=yes
+SolidCompression=no
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
@@ -50,6 +50,9 @@ Source: "tools\yt-dlp.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 Source: "tools\ffmpeg.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 Source: "tools\ffprobe.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
 Source: "tools\node.exe"; DestDir: "{app}\Resources\App"; Flags: ignoreversion
+
+; Elevation helper — placed next to main exe for dependency updates in protected directories
+Source: "tools\YTR Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\appicon.ico"

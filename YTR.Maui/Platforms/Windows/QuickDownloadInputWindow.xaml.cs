@@ -15,11 +15,18 @@ public sealed partial class QuickDownloadInputWindow : Microsoft.UI.Xaml.Window
     private AppWindow? _appWindow;
     private DispatcherTimer? _autoDismissTimer;
     private bool _downloadStarted;
+    private string? _fullErrorMessage;
 
     /// <summary>
     /// Raised when the user submits a URL for download.
     /// </summary>
     public event Action<string>? DownloadRequested;
+
+    /// <summary>
+    /// Raised when the user clicks "View Details" on a failed download.
+    /// The string parameter contains the full error message.
+    /// </summary>
+    public event Action<string>? ViewDetailsRequested;
 
     public QuickDownloadInputWindow()
     {
@@ -54,6 +61,16 @@ public sealed partial class QuickDownloadInputWindow : Microsoft.UI.Xaml.Window
             }
 
             _appWindow.Title = "YTR - Quick Download";
+            SetWindowIcon();
+        }
+    }
+
+    private void SetWindowIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "AppIcon", "appicon.ico");
+        if (File.Exists(iconPath) && _appWindow is not null)
+        {
+            _appWindow.SetIcon(iconPath);
         }
     }
 
@@ -139,7 +156,8 @@ public sealed partial class QuickDownloadInputWindow : Microsoft.UI.Xaml.Window
     }
 
     /// <summary>
-    /// Shows completion and auto-closes after a short delay.
+    /// Shows completion. On success, auto-closes after a short delay.
+    /// On error, stays open with action buttons.
     /// </summary>
     public void Complete(string message, bool isError = false)
     {
@@ -149,16 +167,42 @@ public sealed partial class QuickDownloadInputWindow : Microsoft.UI.Xaml.Window
             ProgressBar.IsIndeterminate = false;
             ProgressBar.Value = isError ? 0 : 100;
 
-            var dismissTimer = new DispatcherTimer
+            if (isError)
             {
-                Interval = TimeSpan.FromSeconds(2.5)
-            };
-            dismissTimer.Tick += (_, _) =>
+                // Store full error and show action buttons — do NOT auto-close
+                _fullErrorMessage = message;
+                ProgressBar.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                ErrorActions.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+
+                // Resize to fit error content
+                _appWindow?.Resize(new SizeInt32(480, 300));
+            }
+            else
             {
-                dismissTimer.Stop();
-                Close();
-            };
-            dismissTimer.Start();
+                // Auto-dismiss on success
+                var dismissTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(2.5)
+                };
+                dismissTimer.Tick += (_, _) =>
+                {
+                    dismissTimer.Stop();
+                    Close();
+                };
+                dismissTimer.Start();
+            }
         });
+    }
+
+    private void ViewDetailsButton_Click(object sender, RoutedEventArgs e)
+    {
+        ViewDetailsRequested?.Invoke(_fullErrorMessage ?? "Unknown error");
+        Close();
+    }
+
+    private void DismissButton_Click(object sender, RoutedEventArgs e)
+    {
+        _autoDismissTimer?.Stop();
+        Close();
     }
 }

@@ -8,7 +8,8 @@ namespace YTR.Maui.Platforms.Windows;
 /// </summary>
 public sealed class WindowsPlatformService : IPlatformService
 {
-    public string AppDataDirectory => FileSystem.AppDataDirectory;
+    public string AppDataDirectory { get; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YTR");
 
     public string DefaultVideoPath =>
         Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
@@ -81,7 +82,8 @@ public sealed class WindowsPlatformService : IPlatformService
         string? systemPath = null;
 
         // 1. Check AppData (updated by in-app updater)
-        var appDataCandidate = Path.Combine(FileSystem.AppDataDirectory, fileName);
+        var appDataCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YTR", fileName);
         if (File.Exists(appDataCandidate))
             appDataPath = appDataCandidate;
 

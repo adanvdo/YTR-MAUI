@@ -2,4 +2,5 @@
   <Project Path="YTR.Core/YTR.Core.csproj" />
   <Project Path="YTR.Maui/YTR.Maui.csproj" />
   <Project Path="YTR.Web/YTR.Web.csproj" />
+  <Project Path="YTR.Elevate/YTR.Elevate.csproj" />
 </Solution>

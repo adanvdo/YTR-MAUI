@@ -30,6 +30,7 @@ public sealed class SettingsService : ISettingsService
     public HistoryOptions History { get; private set; } = new();
     public AudioPreferencesOptions AudioPreferences { get; private set; } = new();
     public WindowStateOptions WindowState { get; private set; } = new();
+    public LoggingOptions Logging { get; private set; } = new();
 
     public SettingsService(IPlatformService platform, ILogger<SettingsService> logger)
     {
@@ -66,6 +67,7 @@ public sealed class SettingsService : ISettingsService
                 History = container.History ?? new();
                 AudioPreferences = container.AudioPreferences ?? new();
                 WindowState = container.WindowState ?? new();
+                Logging = container.Logging ?? new();
             }
 
             _logger.LogInformation("Settings loaded from {Path}", _settingsPath);
@@ -104,7 +106,8 @@ public sealed class SettingsService : ISettingsService
             Updates = Updates,
             History = History,
             AudioPreferences = AudioPreferences,
-            WindowState = WindowState
+            WindowState = WindowState,
+            Logging = Logging
         };
 
         var json = JsonSerializer.Serialize(container, JsonOptions);
@@ -134,6 +137,7 @@ public sealed class SettingsService : ISettingsService
         public HistoryOptions? History { get; set; }
         public AudioPreferencesOptions? AudioPreferences { get; set; }
         public WindowStateOptions? WindowState { get; set; }
+        public LoggingOptions? Logging { get; set; }
     }
 
     public event Action? DarkModeChanged;
