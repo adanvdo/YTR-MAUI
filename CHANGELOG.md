@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0.0] - 2026-09-19 (stable)
+
+### 📦 Other
+- c893469 adding dev files to gitignore
+- d5653f2 #14 fixed download history cleanup functions
+
+### Closes
+- Fixed: #14 Delete Downloads + Logs Option Not Working
+
 ## [1.2.0.0] - 2026-08-20 (stable)
 
 ### ?? Other
@@ -32,6 +41,7 @@
   - .NET 10 Cross-Platform Rewrite of YT-RED-UI
   - Released for Platforms:
     - Windows 10+
+
 
 
 
