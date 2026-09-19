@@ -38,3 +38,7 @@ installer/tools/*.exe
 /.vscode/*
 *.ps1
 *.bat
+
+## Release docs/templates (kept local, not committed)
+RELEASING.md
+release-template.md
