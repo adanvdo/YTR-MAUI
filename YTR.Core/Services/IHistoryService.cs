@@ -21,4 +21,20 @@ public interface IHistoryService
     /// Clears history records and optionally deletes the associated files from disk.
     /// </summary>
     Task ClearWithFilesAsync(StreamKind? filter = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Counts the history records matching the given stream-kind filter (null = all).
+    /// </summary>
+    Task<int> CountAsync(StreamKind? filter = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Counts history records whose associated file no longer exists on disk.
+    /// </summary>
+    Task<int> CountMissingAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes history records whose associated file no longer exists on disk.
+    /// Returns the number of records removed.
+    /// </summary>
+    Task<int> ClearMissingAsync(CancellationToken ct = default);
 }

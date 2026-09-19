@@ -81,7 +81,7 @@ public sealed class HistoryService : IHistoryService
         else
         {
             await db.Downloads
-                .Where(d => d.StreamKind == filter)
+                .Where(MatchesFilter(filter.Value))
                 .ExecuteDeleteAsync(ct);
         }
     }
@@ -92,7 +92,7 @@ public sealed class HistoryService : IHistoryService
 
         var query = filter is null
             ? db.Downloads.AsQueryable()
-            : db.Downloads.Where(d => d.StreamKind == filter);
+            : db.Downloads.Where(MatchesFilter(filter.Value));
 
         var records = await query.ToListAsync(ct);
 
@@ -120,6 +120,56 @@ public sealed class HistoryService : IHistoryService
         if (filter is null)
             await db.Downloads.ExecuteDeleteAsync(ct);
         else
-            await db.Downloads.Where(d => d.StreamKind == filter).ExecuteDeleteAsync(ct);
+            await db.Downloads.Where(MatchesFilter(filter.Value)).ExecuteDeleteAsync(ct);
     }
+
+    public async Task<int> CountAsync(StreamKind? filter = null, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return filter is null
+            ? await db.Downloads.CountAsync(ct)
+            : await db.Downloads.Where(MatchesFilter(filter.Value)).CountAsync(ct);
+    }
+
+    public async Task<int> CountMissingAsync(CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // File existence can't be evaluated in SQL, so materialize and check on disk.
+        var records = await db.Downloads.ToListAsync(ct);
+        return records.Count(IsFileMissing);
+    }
+
+    public async Task<int> ClearMissingAsync(CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var records = await db.Downloads.ToListAsync(ct);
+        var missing = records.Where(IsFileMissing).ToList();
+
+        if (missing.Count == 0)
+            return 0;
+
+        db.Downloads.RemoveRange(missing);
+        await db.SaveChangesAsync(ct);
+        return missing.Count;
+    }
+
+    /// <summary>
+    /// True when a record points to a file that no longer exists on disk.
+    /// Records without a file path are treated as missing.
+    /// </summary>
+    private static bool IsFileMissing(DownloadRecord record) =>
+        string.IsNullOrEmpty(record.FilePath) || !File.Exists(record.FilePath);
+
+    /// <summary>
+    /// Builds a predicate for a stream-kind filter. A "Video" filter matches any record
+    /// that has a video component (both video-only and muxed audio+video downloads),
+    /// since most video downloads are stored as <see cref="StreamKind.AudioAndVideo"/>.
+    /// An "Audio" filter matches audio-only records.
+    /// </summary>
+    private static System.Linq.Expressions.Expression<Func<DownloadRecord, bool>> MatchesFilter(StreamKind filter) =>
+        filter switch
+        {
+            StreamKind.Video => d => d.StreamKind == StreamKind.Video || d.StreamKind == StreamKind.AudioAndVideo,
+            _ => d => d.StreamKind == filter,
+        };
 }

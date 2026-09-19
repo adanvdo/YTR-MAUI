@@ -2,6 +2,7 @@
 @inject IHistoryService HistoryService
 @inject IPlatformService Platform
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <PageTitle>YTR - History</PageTitle>
 
@@ -12,10 +13,12 @@
     <MudSpacer />
     @* Delete buttons (item 17) *@
     <MudMenu Label="Delete" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-             StartIcon="@Icons.Material.Filled.Delete">
+             StartIcon="@Icons.Material.Filled.Delete"
+             EndIcon="@Icons.Material.Filled.ArrowDropDown">
         <MudMenuItem OnClick="() => ClearLogs(null)">Clear All Logs</MudMenuItem>
         <MudMenuItem OnClick="() => ClearLogs(StreamKind.Video)">Clear Video Logs</MudMenuItem>
         <MudMenuItem OnClick="() => ClearLogs(StreamKind.Audio)">Clear Audio Logs</MudMenuItem>
+        <MudMenuItem OnClick="() => ClearMissing()">Delete Missing Download Logs</MudMenuItem>
         <MudDivider />
         <MudMenuItem OnClick="() => DeleteWithFiles(null)">Delete All Files + Logs</MudMenuItem>
         <MudMenuItem OnClick="() => DeleteWithFiles(StreamKind.Video)">Delete Video Files + Logs</MudMenuItem>
@@ -126,19 +129,87 @@
 
     private async Task ClearLogs(StreamKind? filter)
     {
+        var count = await HistoryService.CountAsync(filter);
+        if (count == 0)
+            return;
+
+        var scope = FilterLabel(filter);
+        var confirmed = await ConfirmAsync(
+            "Clear Logs",
+            $"This will remove {count} {scope} history {Pluralize(count, "entry", "entries")}. The downloaded files will not be deleted. Continue?",
+            "Clear Logs");
+        if (!confirmed)
+            return;
+
         await HistoryService.ClearAsync(filter);
+        await ReloadAsync();
+    }
+
+    private async Task DeleteWithFiles(StreamKind? filter)
+    {
+        var count = await HistoryService.CountAsync(filter);
+        if (count == 0)
+            return;
+
+        var scope = FilterLabel(filter);
+        var confirmed = await ConfirmAsync(
+            "Delete Files + Logs",
+            $"This will permanently delete {count} {scope} {Pluralize(count, "file", "files")} from disk and remove their history {Pluralize(count, "entry", "entries")}. This cannot be undone. Continue?",
+            "Delete Files");
+        if (!confirmed)
+            return;
+
+        await HistoryService.ClearWithFilesAsync(filter);
+        await ReloadAsync();
+    }
+
+    private async Task ClearMissing()
+    {
+        var count = await HistoryService.CountMissingAsync();
+        if (count == 0)
+            return;
+
+        var confirmed = await ConfirmAsync(
+            "Delete Missing Download Logs",
+            $"This will remove {count} history {Pluralize(count, "entry", "entries")} whose downloaded {Pluralize(count, "file is", "files are")} missing from disk. Continue?",
+            "Delete Logs");
+        if (!confirmed)
+            return;
+
+        await HistoryService.ClearMissingAsync();
+        await ReloadAsync();
+    }
+
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Title, title },
+            { x => x.Message, message },
+            { x => x.ConfirmText, confirmText }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(title, parameters, options);
+        var result = await dialog.Result;
+        return result is not null && !result.Canceled && result.Data is true;
+    }
+
+    private async Task ReloadAsync()
+    {
         _records = await HistoryService.GetAllAsync();
         _selectedRecord = null;
         StateHasChanged();
     }
 
-    private async Task DeleteWithFiles(StreamKind? filter)
+    private static string FilterLabel(StreamKind? filter) => filter switch
     {
-        await HistoryService.ClearWithFilesAsync(filter);
-        _records = await HistoryService.GetAllAsync();
-        _selectedRecord = null;
-        StateHasChanged();
-    }
+        StreamKind.Video => "video",
+        StreamKind.Audio => "audio",
+        _ => "all"
+    };
+
+    private static string Pluralize(int count, string singular, string plural) =>
+        count == 1 ? singular : plural;
 
     private string GetRowClass(DownloadRecord item, int _) =>
         item == _selectedRecord ? "selected-row" : string.Empty;
