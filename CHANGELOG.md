@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0.0] - 2026-10-18 (stable)
+
+### Closes
+- Fixed: #15 Urls are being incorrectly marked as invalid
+- Fixed: #16 reddit downloads failing
+
+
 ## [1.3.0.0] - 2026-09-19 (stable)
 
 ### 📦 Other
@@ -41,6 +48,7 @@
   - .NET 10 Cross-Platform Rewrite of YT-RED-UI
   - Released for Platforms:
     - Windows 10+
+
 
 
 
