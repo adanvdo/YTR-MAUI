@@ -47,4 +47,12 @@ public interface IYtDlpService
         IProgress<DownloadProgress>? progress = null,
         IProgress<string>? output = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Exports cookies from the specified browser to a Netscape-format cookies file.
+    /// </summary>
+    Task<Result<string>> ExportBrowserCookiesAsync(
+        CookieBrowser browser,
+        string outputFilePath,
+        CancellationToken ct = default);
 }

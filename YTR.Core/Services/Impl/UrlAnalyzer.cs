@@ -16,6 +16,12 @@ public sealed partial class UrlAnalyzer : IUrlAnalyzer
 
         var trimmed = input.Trim();
 
+        var isUrl = Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+        if(!isUrl)
+            return Platform(input, trimmed, MediaPlatform.Empty);
+
+        var host = uri.Host.ToLowerInvariant();
+
         // Check if it's a bare YouTube video ID (11 chars) or playlist ID (34 chars)
         if (BareIdRegex().IsMatch(trimmed))
         {

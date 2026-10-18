@@ -17,6 +17,13 @@ public sealed class DownloadStateService
     public string StatusMessage => _statusMessage;
     public bool IsDownloading => _currentProgress.State is DownloadState.Downloading or DownloadState.PreProcessing or DownloadState.PostProcessing;
     public bool CanCancel => _cts is not null && !_cts.IsCancellationRequested;
+    public bool HasError => _currentProgress.State == DownloadState.Error
+        || (!string.IsNullOrWhiteSpace(_statusMessage) && (
+            _statusMessage.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+            || _statusMessage.StartsWith("Failed", StringComparison.OrdinalIgnoreCase)
+            || _statusMessage.StartsWith("[error]", StringComparison.OrdinalIgnoreCase)
+            || _statusMessage.Contains("Error:", StringComparison.OrdinalIgnoreCase)
+            || _statusMessage.Contains("Failed:", StringComparison.OrdinalIgnoreCase)));
 
     public event Action? OnStateChanged;
 

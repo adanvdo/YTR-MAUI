@@ -11,7 +11,7 @@ public sealed record UrlAnalysisResult
     public required string NormalizedUrl { get; init; }
     public MediaPlatform Platform { get; init; }
     public YoutubeLinkType YouTubeLinkType { get; init; } = YoutubeLinkType.Invalid;
-    public bool IsValid => Platform != MediaPlatform.Empty && Platform != MediaPlatform.Unknown;
+    public bool IsValid => Platform != MediaPlatform.Empty;
     public bool IsPlaylist { get; init; }
     public string? VideoId { get; init; }
     public string? PlaylistId { get; init; }

@@ -172,6 +172,10 @@ html, body {
     text-align: left;
 }
 
+.status-bar .status-text.status-error {
+    color: var(--mud-palette-error, #f44336);
+}
+
 .status-bar .status-cancel {
     padding: 0 !important;
     width: 16px !important;

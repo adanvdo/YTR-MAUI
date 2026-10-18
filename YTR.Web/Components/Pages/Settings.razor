@@ -5,6 +5,7 @@
 @inject IDependencyUpdateService DependencyUpdater
 @inject IHotkeyService HotkeyService
 @inject IPlatformService Platform
+@inject IYtDlpService YtDlp
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -219,6 +220,66 @@
                                     ? $"{SettingsService.Download.HotkeyModifiers}+{SettingsService.Download.HotkeyKey}"
                                     : "Disabled")
                             </MudText>
+                        </MudStack>
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <div class="settings-card">
+                        <MudText Typo="Typo.h6" Class="mb-2">Cookies</MudText>
+                        <MudStack Spacing="1">
+                            <MudSelect @bind-Value="SettingsService.Cookies.Mode"
+                                    Label="Cookies" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                <MudSelectItem Value="CookieMode.Disabled">Disabled</MudSelectItem>
+                                <MudSelectItem Value="CookieMode.FromBrowser">From Browser</MudSelectItem>
+                                <MudSelectItem Value="CookieMode.FromFile">From File</MudSelectItem>
+                            </MudSelect>
+
+                            <MudSelect @bind-Value="SettingsService.Cookies.Browser"
+                                    Label="Browser" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                    Disabled="@(SettingsService.Cookies.Mode != CookieMode.FromBrowser)">
+                                @foreach (var browser in Enum.GetValues<CookieBrowser>())
+                                {
+                                    <MudSelectItem Value="browser">@browser</MudSelectItem>
+                                }
+                            </MudSelect>
+
+                            @if (SettingsService.Cookies.Mode == CookieMode.FromBrowser)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                        Disabled="_cookieExporting"
+                                        OnClick="ExportBrowserCookies">
+                                    @if (_cookieExporting)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    }
+                                    Export Browser Cookies to File
+                                </MudButton>
+                            }
+
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudTextField @bind-Value="SettingsService.Cookies.CookieFilePath"
+                                            Label="Cookies File (.txt)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;"
+                                            Disabled="@(SettingsService.Cookies.Mode != CookieMode.FromFile)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.FolderOpen" Color="Color.Primary"
+                                            Disabled="@(SettingsService.Cookies.Mode != CookieMode.FromFile)"
+                                            OnClick="PickCookieFile" title="Browse" />
+                            </MudStack>
+
+                            @if (_cookieExportMessage is not null)
+                            {
+                                <MudAlert Severity="Severity.Success" Dense="true" ShowCloseIcon="true"
+                                        CloseIconClicked="() => _cookieExportMessage = null">
+                                    @_cookieExportMessage
+                                </MudAlert>
+                            }
+                            @if (_cookieExportError is not null)
+                            {
+                                <MudAlert Severity="Severity.Error" Dense="true" ShowCloseIcon="true"
+                                        CloseIconClicked="() => _cookieExportError = null">
+                                    @_cookieExportError
+                                </MudAlert>
+                            }
                         </MudStack>
                     </div>
                 </MudItem>
@@ -462,6 +523,11 @@
         }
     }
 
+    // Cookie export state
+    private bool _cookieExporting;
+    private string? _cookieExportMessage;
+    private string? _cookieExportError;
+
     private async Task PickLogFolder()
     {
         var startDir = EffectiveLogDirectory;
@@ -471,6 +537,47 @@
             SettingsService.Logging.LogDirectory = path;
             StateHasChanged();
         }
+    }
+
+    private async Task PickCookieFile()
+    {
+        var currentFile = SettingsService.Cookies.CookieFilePath;
+        var startDir = !string.IsNullOrWhiteSpace(currentFile)
+            ? Path.GetDirectoryName(currentFile)
+            : Platform.AppDataDirectory;
+
+        var path = await FolderPicker.PickFileAsync(startDir, ".txt");
+        if (path is not null)
+        {
+            SettingsService.Cookies.CookieFilePath = path;
+            _cookieExportError = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportBrowserCookies()
+    {
+        _cookieExporting = true;
+        _cookieExportMessage = null;
+        _cookieExportError = null;
+        StateHasChanged();
+
+        var outputPath = Path.Combine(Platform.AppDataDirectory, "cookies.txt");
+        var result = await YtDlp.ExportBrowserCookiesAsync(SettingsService.Cookies.Browser, outputPath);
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            SettingsService.Cookies.CookieFilePath = result.Value;
+            SettingsService.Cookies.Mode = CookieMode.FromFile;
+            _cookieExportMessage = $"Cookies exported to {result.Value}";
+        }
+        else
+        {
+            _cookieExportError = result.Error ?? "Failed to export browser cookies.";
+        }
+
+        _cookieExporting = false;
+        StateHasChanged();
     }
 
     private string _defaultLogDirectory => Path.Combine(Platform.AppDataDirectory, "Logs");

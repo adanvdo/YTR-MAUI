@@ -32,6 +32,39 @@ public sealed class WindowsFolderPickerService : IFolderPickerService
         return folder?.Path;
     }
 
+    public async Task<string?> PickFileAsync(string? startDirectory = null, params string[] extensions)
+    {
+        if (!string.IsNullOrWhiteSpace(startDirectory) && Directory.Exists(startDirectory))
+        {
+            return await Task.Run(() => PickFileWithComDialog(startDirectory, extensions));
+        }
+
+        var picker = new FileOpenPicker();
+        picker.SuggestedStartLocation = PickerLocationId.Downloads;
+        if (extensions is { Length: > 0 })
+        {
+            foreach (var ext in extensions)
+            {
+                if (!string.IsNullOrWhiteSpace(ext))
+                    picker.FileTypeFilter.Add(ext.StartsWith('.') ? ext : $".{ext}");
+            }
+        }
+        else
+        {
+            picker.FileTypeFilter.Add("*");
+        }
+
+        var window = Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+        if (window is not null)
+        {
+            var hwnd = WindowNative.GetWindowHandle(window);
+            InitializeWithWindow.Initialize(picker, hwnd);
+        }
+
+        var file = await picker.PickSingleFileAsync();
+        return file?.Path;
+    }
+
     /// <summary>
     /// Uses the Win32 IFileOpenDialog COM interface to show a folder picker
     /// with a specific initial directory.
@@ -42,6 +75,19 @@ public sealed class WindowsFolderPickerService : IFolderPickerService
         var thread = new Thread(() =>
         {
             result = ShowComFolderDialog(startDirectory);
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        return result;
+    }
+
+    private static string? PickFileWithComDialog(string startDirectory, string[] extensions)
+    {
+        string? result = null;
+        var thread = new Thread(() =>
+        {
+            result = ShowComFileDialog(startDirectory, extensions);
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -99,14 +145,83 @@ public sealed class WindowsFolderPickerService : IFolderPickerService
         }
     }
 
+    private static string? ShowComFileDialog(string startDirectory, string[] extensions)
+    {
+        var hr = CoCreateInstance(
+            ref CLSID_FileOpenDialog, nint.Zero, 1 /* CLSCTX_INPROC_SERVER */,
+            ref IID_IFileOpenDialog, out var dialogPtr);
+
+        if (hr != 0 || dialogPtr == nint.Zero)
+            return null;
+
+        var dialog = (IFileOpenDialog)Marshal.GetObjectForIUnknown(dialogPtr);
+        Marshal.Release(dialogPtr);
+
+        try
+        {
+            dialog.GetOptions(out var options);
+            dialog.SetOptions(options | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+
+            if (extensions is { Length: > 0 })
+            {
+                var patterns = string.Join(";", extensions.Select(e => e.StartsWith('.') ? $"*{e}" : $"*.{e}"));
+                var filters = new[]
+                {
+                    new COMDLG_FILTERSPEC { pszName = $"Supported Files ({patterns})", pszSpec = patterns },
+                    new COMDLG_FILTERSPEC { pszName = "All Files (*.*)", pszSpec = "*.*" }
+                };
+                dialog.SetFileTypes((uint)filters.Length, filters);
+                dialog.SetFileTypeIndex(1);
+            }
+
+            if (!string.IsNullOrEmpty(startDirectory))
+            {
+                var riid = typeof(IShellItem).GUID;
+                SHCreateItemFromParsingName(startDirectory, nint.Zero, ref riid, out var folderItem);
+                if (folderItem is not null)
+                {
+                    dialog.SetFolder(folderItem);
+                }
+            }
+
+            var window = Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView as Microsoft.UI.Xaml.Window;
+            var hwnd = window is not null ? WindowNative.GetWindowHandle(window) : nint.Zero;
+
+            hr = dialog.Show(hwnd);
+            if (hr != 0)
+                return null;
+
+            dialog.GetResult(out var item);
+            if (item is null)
+                return null;
+
+            item.GetDisplayName(SIGDN_FILESYSPATH, out var path);
+            return path;
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(dialog);
+        }
+    }
+
     #region COM Interop
 
     private const uint FOS_PICKFOLDERS = 0x00000020;
     private const uint FOS_FORCEFILESYSTEM = 0x00000040;
+    private const uint FOS_FILEMUSTEXIST = 0x00001000;
     private const uint SIGDN_FILESYSPATH = 0x80058000;
 
     private static Guid CLSID_FileOpenDialog = new("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
     private static Guid IID_IFileOpenDialog = new("D57C7288-D4AD-4768-BE02-9D969532D960");
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct COMDLG_FILTERSPEC
+    {
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string pszName;
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string pszSpec;
+    }
 
     [DllImport("ole32.dll")]
     private static extern int CoCreateInstance(
@@ -123,9 +238,9 @@ public sealed class WindowsFolderPickerService : IFolderPickerService
     private interface IFileOpenDialog
     {
         [PreserveSig] int Show(nint hwndOwner);
-        void SetFileTypes();  // unused
-        void SetFileTypeIndex();  // unused
-        void GetFileTypeIndex();  // unused
+        void SetFileTypes(uint cFileTypes, [In, MarshalAs(UnmanagedType.LPArray)] COMDLG_FILTERSPEC[] rgFilterSpec);
+        void SetFileTypeIndex(uint iFileType);
+        void GetFileTypeIndex(out uint piFileType);
         void Advise();  // unused
         void Unadvise();  // unused
         void SetOptions(uint fos);

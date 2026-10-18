@@ -31,6 +31,7 @@ public sealed class SettingsService : ISettingsService
     public AudioPreferencesOptions AudioPreferences { get; private set; } = new();
     public WindowStateOptions WindowState { get; private set; } = new();
     public LoggingOptions Logging { get; private set; } = new();
+    public CookieOptions Cookies { get; private set; } = new();
 
     public SettingsService(IPlatformService platform, ILogger<SettingsService> logger)
     {
@@ -68,6 +69,7 @@ public sealed class SettingsService : ISettingsService
                 AudioPreferences = container.AudioPreferences ?? new();
                 WindowState = container.WindowState ?? new();
                 Logging = container.Logging ?? new();
+                Cookies = container.Cookies ?? new();
             }
 
             _logger.LogInformation("Settings loaded from {Path}", _settingsPath);
@@ -107,7 +109,8 @@ public sealed class SettingsService : ISettingsService
             History = History,
             AudioPreferences = AudioPreferences,
             WindowState = WindowState,
-            Logging = Logging
+            Logging = Logging,
+            Cookies = Cookies
         };
 
         var json = JsonSerializer.Serialize(container, JsonOptions);
@@ -138,6 +141,7 @@ public sealed class SettingsService : ISettingsService
         public AudioPreferencesOptions? AudioPreferences { get; set; }
         public WindowStateOptions? WindowState { get; set; }
         public LoggingOptions? Logging { get; set; }
+        public CookieOptions? Cookies { get; set; }
     }
 
     public event Action? DarkModeChanged;
@@ -152,6 +156,26 @@ public sealed class SettingsService : ISettingsService
             return "Audio download path is required.";
         if (Processing.PreferredVideoFormat == VideoFormat.Gif)
             return "Preferred video format cannot be GIF.";
+        if (Cookies.Mode == CookieMode.FromFile)
+        {
+            if (string.IsNullOrWhiteSpace(Cookies.CookieFilePath))
+                return "Cookies file path is required when Cookies mode is set to From File.";
+            if (!File.Exists(Cookies.CookieFilePath))
+                return "The specified cookies file does not exist.";
+
+            try
+            {
+                var firstLine = File.ReadLines(Cookies.CookieFilePath).FirstOrDefault()?.Trim();
+                if (firstLine is not ("# HTTP Cookie File" or "# Netscape HTTP Cookie File"))
+                {
+                    return "Cookies file must be in Mozilla/Netscape format (first line must be '# HTTP Cookie File' or '# Netscape HTTP Cookie File').";
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"Unable to read cookies file: {ex.Message}";
+            }
+        }
         return null;
     }
 }

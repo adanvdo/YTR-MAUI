@@ -16,6 +16,7 @@ public sealed partial class YtDlpService : IYtDlpService
 {
     private readonly IProcessRunner _processRunner;
     private readonly IPlatformService _platform;
+    private readonly ISettingsService _settings;
     private readonly IOptions<DownloadOptions> _downloadOptions;
     private readonly IOptions<RestrictionOptions> _restrictionOptions;
     private readonly IOptions<ProcessingOptions> _processingOptions;
@@ -31,6 +32,7 @@ public sealed partial class YtDlpService : IYtDlpService
     public YtDlpService(
         IProcessRunner processRunner,
         IPlatformService platform,
+        ISettingsService settings,
         IOptions<DownloadOptions> downloadOptions,
         IOptions<RestrictionOptions> restrictionOptions,
         IOptions<ProcessingOptions> processingOptions,
@@ -38,6 +40,7 @@ public sealed partial class YtDlpService : IYtDlpService
     {
         _processRunner = processRunner;
         _platform = platform;
+        _settings = settings;
         _downloadOptions = downloadOptions;
         _restrictionOptions = restrictionOptions;
         _processingOptions = processingOptions;
@@ -55,9 +58,29 @@ public sealed partial class YtDlpService : IYtDlpService
     /// </summary>
     private string JsRuntimesArg => $"--js-runtimes node:\"{NodePath}\"";
 
+    /// <summary>
+    /// Builds the cookies CLI argument based on current settings, or null if disabled.
+    /// </summary>
+    private string? GetCookiesArg()
+    {
+        var cookies = _settings.Cookies;
+        switch (cookies.Mode)
+        {
+            case CookieMode.FromBrowser:
+                return $"--cookies-from-browser {cookies.Browser.ToString().ToLowerInvariant()}";
+            case CookieMode.FromFile when !string.IsNullOrWhiteSpace(cookies.CookieFilePath) && File.Exists(cookies.CookieFilePath):
+                NormalizeCookieFileNewlines(cookies.CookieFilePath);
+                return $"--cookies \"{cookies.CookieFilePath}\"";
+            default:
+                return null;
+        }
+    }
+
+    private string CookiesArgPrefix => GetCookiesArg() is { } arg ? $" {arg}" : "";
+
     public async Task<Result<MediaMetadata>> GetMediaInfoAsync(string url, CancellationToken ct = default)
     {
-        var args = $"{JsRuntimesArg} --dump-json --no-playlist \"{url}\"";
+        var args = $"{JsRuntimesArg}{CookiesArgPrefix} --dump-json --no-playlist \"{url}\"";
         _logger.LogDebug("[yt-dlp] GetMediaInfo started for URL: {Url}", url);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -90,7 +113,7 @@ public sealed partial class YtDlpService : IYtDlpService
 
     public async Task<Result<MediaMetadata>> GetPlaylistInfoAsync(string url, CancellationToken ct = default)
     {
-        var args = $"{JsRuntimesArg} --flat-playlist --dump-single-json \"{url}\"";
+        var args = $"{JsRuntimesArg}{CookiesArgPrefix} --flat-playlist --dump-single-json \"{url}\"";
         _logger.LogDebug("[yt-dlp] GetPlaylistInfo started for URL: {Url}", url);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -123,7 +146,7 @@ public sealed partial class YtDlpService : IYtDlpService
 
     public async Task<Result<IReadOnlyList<string>>> GetFormatUrlsAsync(string url, string format, CancellationToken ct = default)
     {
-        var args = $"{JsRuntimesArg} --get-url -f \"{format}\" \"{url}\"";
+        var args = $"{JsRuntimesArg}{CookiesArgPrefix} --get-url -f \"{format}\" \"{url}\"";
         _logger.LogDebug("[yt-dlp] GetFormatUrls started for URL: {Url} | Format: {Format}", url, format);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -290,6 +313,95 @@ public sealed partial class YtDlpService : IYtDlpService
             : Result<string>.Failure("Download completed but output file path could not be determined.");
     }
 
+    public async Task<Result<string>> ExportBrowserCookiesAsync(
+        CookieBrowser browser,
+        string outputFilePath,
+        CancellationToken ct = default)
+    {
+        var browserArg = browser.ToString().ToLowerInvariant();
+        var dir = Path.GetDirectoryName(outputFilePath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
+
+        var tempPath = outputFilePath + ".tmp";
+        if (File.Exists(tempPath))
+            File.Delete(tempPath);
+
+        var args = $"{JsRuntimesArg} --cookies-from-browser {browserArg} --cookies \"{tempPath}\"";
+        _logger.LogDebug("[yt-dlp] ExportBrowserCookies started | Browser: {Browser} | Output: {Output}", browserArg, outputFilePath);
+
+        var result = await _processRunner.RunAsync(new ProcessRequest
+        {
+            Executable = YtDlpPath,
+            Arguments = args
+        }, ct);
+
+        if (result.WasCancelled)
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+            return Result<string>.Failure("Cookie export cancelled.");
+        }
+
+        // yt-dlp writes the cookies file before exiting with "You must provide at least one URL." when no URL is given.
+        if (!File.Exists(tempPath))
+        {
+            var errLines = result.StandardError
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(l => !l.StartsWith("Usage:", StringComparison.OrdinalIgnoreCase)
+                         && !l.Contains("You must provide at least one URL", StringComparison.OrdinalIgnoreCase)
+                         && !l.Contains("Type yt-dlp --help", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var errMsg = errLines.Count > 0 ? string.Join(" ", errLines) : result.StandardError.Trim();
+            _logger.LogError("[yt-dlp] ExportBrowserCookies failed | Browser: {Browser} | Error: {Error}", browserArg, errMsg);
+            return Result<string>.Failure($"Failed to export cookies from {browser}: {errMsg}");
+        }
+
+        try
+        {
+            NormalizeCookieFileNewlines(tempPath);
+
+            var firstLine = File.ReadLines(tempPath).FirstOrDefault()?.Trim();
+            if (firstLine is not ("# HTTP Cookie File" or "# Netscape HTTP Cookie File"))
+            {
+                File.Delete(tempPath);
+                return Result<string>.Failure("Exported cookies file does not have a valid Mozilla/Netscape header.");
+            }
+
+            File.Move(tempPath, outputFilePath, overwrite: true);
+            _logger.LogInformation("[yt-dlp] Exported browser cookies from {Browser} to {Output}", browserArg, outputFilePath);
+            return Result<string>.Success(outputFilePath);
+        }
+        catch (Exception ex)
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+            _logger.LogError(ex, "[yt-dlp] Failed finalizing exported cookies file {Output}", outputFilePath);
+            return Result<string>.Failure($"Failed to save cookies file: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Ensures the cookies file uses the OS-specific newline format (CRLF on Windows, LF on Unix)
+    /// to prevent HTTP 400 Bad Request errors in yt-dlp.
+    /// </summary>
+    private void NormalizeCookieFileNewlines(string filePath)
+    {
+        try
+        {
+            var content = File.ReadAllText(filePath);
+            var normalized = content.Replace("\r\n", "\n").Replace("\r", "\n");
+            if (Environment.NewLine != "\n")
+                normalized = normalized.Replace("\n", Environment.NewLine);
+
+            if (!string.Equals(content, normalized, StringComparison.Ordinal))
+                File.WriteAllText(filePath, normalized);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not normalize newlines in cookies file {FilePath}", filePath);
+        }
+    }
+
     #region Argument Building
 
     private string BuildDownloadArgs(string url, string format, string outputTemplate, StreamKind streamKind, bool embedThumbnail = false, VideoFormat? mergeFormat = null)
@@ -304,6 +416,9 @@ public sealed partial class YtDlpService : IYtDlpService
             "--newline",
             "--restrict-filenames"
         };
+
+        if (GetCookiesArg() is { } cookiesArg)
+            args.Add(cookiesArg);
 
         // Merge output format (forces container for merged video+audio)
         if (mergeFormat.HasValue && mergeFormat != VideoFormat.Unspecified && mergeFormat != VideoFormat.Gif)

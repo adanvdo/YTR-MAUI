@@ -68,6 +68,11 @@
             var result = UrlAnalyzer.Analyze(_url);
             await OnUrlAnalyzed.InvokeAsync(result);
         }
+        catch(Exception ex)
+        {
+            Console.WriteLine($"Error analyzing URL: {ex.Message}");
+            // Optionally, you can invoke an error callback or show a message to the user.
+        }
         finally
         {
             _loading = IsLoading;

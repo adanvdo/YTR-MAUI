@@ -15,7 +15,7 @@
                                Rounded="true" Size="Size.Small" Class="status-progress" />
         }
                            
-        <div class="status-text">
+        <div class="status-text @(HasError ? "status-error" : "")" style="@(HasError ? "color: var(--mud-palette-error, #f44336);" : "")">
             <span>@State.StatusMessage</span>
             @if (State.CurrentProgress.Speed is not null)
             {
@@ -31,13 +31,13 @@
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Primary"
                            Rounded="true" Size="Size.Small" Class="status-progress" />
-        <div class="status-text">
+        <div class="status-text @(HasError ? "status-error" : "")" style="@(HasError ? "color: var(--mud-palette-error, #f44336);" : "")">
             <span>@State.StatusMessage</span>
         </div>
     }
     else
     {
-        <div class="status-text">
+        <div class="status-text @(HasError ? "status-error" : "")" style="@(HasError ? "color: var(--mud-palette-error, #f44336);" : "")">
             <span>@State.StatusMessage</span>
         </div>
     }
@@ -47,6 +47,9 @@
     private bool _indeterminate;
 
     [Parameter] public bool ShowIndeterminate { get; set; }
+    [Parameter] public bool? IsError { get; set; }
+
+    private bool HasError => IsError ?? State.HasError;
 
     protected override void OnInitialized()
     {

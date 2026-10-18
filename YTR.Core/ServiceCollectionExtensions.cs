@@ -77,6 +77,14 @@ public static class ServiceCollectionExtensions
                 opts.UseVideoThumbnailAsAlbumArt = svc.AudioPreferences.UseVideoThumbnailAsAlbumArt;
             });
 
+        services.AddOptions<CookieOptions>()
+            .Configure<ISettingsService>((opts, svc) =>
+            {
+                opts.Mode = svc.Cookies.Mode;
+                opts.Browser = svc.Cookies.Browser;
+                opts.CookieFilePath = svc.Cookies.CookieFilePath;
+            });
+
         services.AddHttpClient();
 
         // Migration

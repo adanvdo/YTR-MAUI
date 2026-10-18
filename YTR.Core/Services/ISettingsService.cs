@@ -16,6 +16,7 @@ public interface ISettingsService
     AudioPreferencesOptions AudioPreferences { get; }
     WindowStateOptions WindowState { get; }
     LoggingOptions Logging { get; }
+    CookieOptions Cookies { get; }
 
     Task LoadAsync(CancellationToken ct = default);
     Task SaveAsync(CancellationToken ct = default);

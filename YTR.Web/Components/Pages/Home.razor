@@ -73,6 +73,13 @@
         <MudPaper Class="pa-6" Style="max-width:600px; margin:auto; margin-top:15vh;" Elevation="8" @onclick:stopPropagation="true">
             <MudText Typo="Typo.h6" Color="Color.Error" Class="mb-2">Download Failed</MudText>
             <MudText Typo="Typo.body2" Style="white-space:pre-wrap; word-break:break-word;">@_errorDetails</MudText>
+            @if (IsCookieAuthError(_errorDetails))
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-4" Dense="true" NoIcon="false">
+                    Account authentication is required for this host.<br/>
+                    Visit <b>Settings → Advanced → Cookies</b> to configure browser or file cookies.
+                </MudAlert>
+            }
             <MudAlert Severity="Severity.Info" Class="mt-4" Dense="true" NoIcon="false">
                 These errors are usually caused by out-of-date dependencies.<br/>
                 Visit <b>Settings → About</b> to check for available dependency updates.
@@ -285,7 +292,10 @@
         }
         else
         {
-            State.UpdateStatus($"Error: {result.Error}");
+            if (IsCookieAuthError(result.Error))
+                State.ReportError(result.Error!);
+            else
+                State.UpdateStatus($"Error: {result.Error}");
         }
         _loadingFormats = false;
         StateHasChanged();
@@ -345,7 +355,7 @@
 
             if (infoResult.IsFailure || infoResult.Value is null)
             {
-                State.UpdateStatus($"Error: {infoResult.Error}");
+                State.ReportError(infoResult.Error ?? "Failed to fetch media info.");
                 StateHasChanged();
                 return;
             }
@@ -448,7 +458,7 @@
                 if (result.IsSuccess)
                     State.UpdateStatus($"Playlist complete: {result.Value} items downloaded.");
                 else
-                    State.UpdateStatus($"Failed: {result.Error}");
+                    State.ReportError(result.Error ?? "Playlist download failed.");
             }
             else if (_selectedPair is not null && _selectedPair.IsValid)
             {
@@ -492,6 +502,12 @@
             State.ReportError(result.Error ?? "Download failed.");
         }
     }
+
+    private static bool IsCookieAuthError(string? error) =>
+        !string.IsNullOrWhiteSpace(error) && (
+            error.Contains("Account authentication is required", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("--cookies-from-browser", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("Use --cookies", StringComparison.OrdinalIgnoreCase));
 
     private void OnDownloadError(string error)
     {
